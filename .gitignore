@@ -1,0 +1,25 @@
+# ===== Frontend =====
+frontend/node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+
+# ===== Backend =====
+backend/target/
+
+# 数据库文件保留（不 ignore）
+# backend/data/stockdb.mv.db  ← 会上传到 GitHub
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/settings.json
+.vscode/*.code-workspace
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== Logs =====
+*.log
