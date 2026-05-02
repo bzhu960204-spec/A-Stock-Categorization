@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { marked } from 'marked';
+import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
   getStocks, createStock, deleteStock, setStockCategories, updateStock,
   getCategories, createCategory, updateCategory, deleteCategory,
   filterStocks, searchStocks, lookupStock, lookupStockSuggest, lookupUsStock, lookupUsStockSuggest,
-  getStockTimeline, getStockDocuments, createStockDocument, updateStockDocument, deleteStockDocument,
+  lookupGlobalStock, lookupGlobalStockSuggest,
+  getStockTimeline, getStockDocuments, createStockDocument, updateStockDocument, deleteStockDocument, uploadDocImage,
   type Stock, type Category, type LookupSuggestion, type StockTimelineEntry, type StockDocument
 } from './api';
 import './App.css';
@@ -49,12 +52,33 @@ function groupEntriesByDay(entries: StockTimelineEntry[]) {
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(e);
   }
+
   return Array.from(map.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, entries]) => ({ key, entries }));
+    .map(([key, dayEntries]) => {
+      // Deduplicate: for each actionType (+ document title for DOCUMENT actions),
+      // keep only the last entry (highest id = most recent write).
+      const deduped = new Map<string, StockTimelineEntry>();
+      for (const e of dayEntries) {
+        // For DOCUMENT actions include the title so each document is tracked separately
+        const dedupeKey = e.actionType === 'DOCUMENT'
+          ? `${e.actionType}::${e.description.replace(/^(新增|编辑|删除)文档：/, '')}`
+          : e.actionType;
+        const existing = deduped.get(dedupeKey);
+        if (!existing || e.id > existing.id) {
+          deduped.set(dedupeKey, e);
+        }
+      }
+      return { key, entries: Array.from(deduped.values()).sort((a, b) => a.id - b.id) };
+    });
 }
 
-function App() {
+// Resizable image component for document read view
+interface AppProps {
+  onGoHome?: () => void;
+}
+
+function App({ onGoHome }: AppProps = {}) {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [darkMode, setDarkMode] = useState(false);
@@ -63,11 +87,11 @@ function App() {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
   const [filterMode, setFilterMode] = useState<'union' | 'intersection'>('union');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [marketFilter, setMarketFilter] = useState<'all' | 'CN' | 'US'>('all');
+  const [marketFilter, setMarketFilter] = useState<'all' | 'CN' | 'US' | 'OTHER'>('all');
 
   // Add stock dialog
   const [showAddStock, setShowAddStock] = useState(false);
-  const [newStockMarket, setNewStockMarket] = useState<'CN' | 'US'>('CN');
+  const [newStockMarket, setNewStockMarket] = useState<'CN' | 'US' | 'JP' | 'KR' | 'TW' | 'HK'>('CN');
   const [newStockCode, setNewStockCode] = useState('');
   const [newStockName, setNewStockName] = useState('');
   const [newStockNotes, setNewStockNotes] = useState('');
@@ -124,7 +148,40 @@ function App() {
   const [selectedDocument, setSelectedDocument] = useState<StockDocument | null>(null);
   const [editDocTitle, setEditDocTitle] = useState('');
   const [editDocContent, setEditDocContent] = useState('');
+  const editDocContentRef = useRef('');  // always tracks latest content even if state lags
+  const [docSaveError, setDocSaveError] = useState('');
   const [savingDocument, setSavingDocument] = useState(false);
+  const docImageInputRef = useRef<HTMLInputElement>(null);
+  const docEditorRef = useRef<DocEditorHandle>(null);
+
+  const insertImageIntoDoc = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const src = e.target?.result as string;
+      docEditorRef.current?.insertImage(src);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Before saving: upload any data: URIs to the backend and replace with real URLs
+  const processImagesBeforeSave = async (html: string): Promise<string> => {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const images = Array.from(doc.querySelectorAll('img[src^="data:image/"]'));
+    for (const img of images) {
+      const dataUrl = img.getAttribute('src')!;
+      try {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], 'image.png', { type: blob.type });
+        const url = await uploadDocImage(file);
+        img.setAttribute('src', url);
+      } catch {
+        // keep data URI if upload fails — document still saves
+      }
+    }
+    return doc.body.innerHTML;
+  };
   const [pendingDeleteDoc, setPendingDeleteDoc] = useState<StockDocument | null>(null);
   const [profileDraft, setProfileDraft] = useState({
     notes: '',
@@ -185,6 +242,8 @@ function App() {
     try {
       const res = newStockMarket === 'US'
         ? await lookupUsStock(value)
+        : ['JP', 'KR', 'TW', 'HK'].includes(newStockMarket)
+        ? await lookupGlobalStock(value, newStockMarket)
         : await lookupStock(value);
       if (!res.data.error) {
         if (field === 'code') setNewStockName(res.data.name);
@@ -207,6 +266,8 @@ function App() {
       try {
         const res = newStockMarket === 'US'
           ? await lookupUsStockSuggest(trimmedCode, 8)
+          : ['JP', 'KR', 'TW', 'HK'].includes(newStockMarket)
+          ? await lookupGlobalStockSuggest(trimmedCode, newStockMarket, 8)
           : await lookupStockSuggest(trimmedCode, 8);
         setCodeSuggestions(res.data);
       } catch {
@@ -230,6 +291,8 @@ function App() {
       try {
         const res = newStockMarket === 'US'
           ? await lookupUsStockSuggest(trimmedName, 8)
+          : ['JP', 'KR', 'TW', 'HK'].includes(newStockMarket)
+          ? await lookupGlobalStockSuggest(trimmedName, newStockMarket, 8)
           : await lookupStockSuggest(trimmedName, 8);
         setNameSuggestions(res.data);
       } catch {
@@ -288,8 +351,8 @@ function App() {
 
       const formatImportedText = (value: string) =>
         value
-          .replace(/([;；。：:])\s*/g, '$1\n')
-          .replace(/\n{2,}/g, '\n')
+          .replace(/([;；。：:])\s*/g, '$1\n\n')
+          .replace(/\n{3,}/g, '\n\n')
           .trim();
 
       const pick = (...keys: string[]) => {
@@ -327,6 +390,7 @@ function App() {
       const res = await updateStock(profileStock.id, {
         code: profileStock.code,
         name: profileStock.name,
+        market: profileStock.market,
         ...profileDraft,
       });
       setProfileStock(res.data);
@@ -504,18 +568,24 @@ function App() {
   const handleAddDocument = async () => {
     if (!documentStock) return;
     const title = editDocTitle.trim();
-    const content = editDocContent.trim();
-    if (!title || !content) return;
+    // Use ref as fallback in case MDEditor onChange lagged behind state
+    const rawContent = (editDocContentRef.current || editDocContent).trim();
+    if (!title) { setDocSaveError('请填写日志标题'); return; }
+    if (!rawContent) { setDocSaveError('日志内容不能为空'); return; }
 
+    setDocSaveError('');
     setSavingDocument(true);
     try {
+      const content = await processImagesBeforeSave(rawContent);
       const res = await createStockDocument(documentStock.id, { title, content });
       setDocuments(prev => [res.data, ...prev]);
       setEditDocTitle('');
       setEditDocContent('');
+      editDocContentRef.current = '';
       setDocViewMode('list');
     } catch (e) {
       console.error('Failed to create stock document', e);
+      setDocSaveError('保存失败，请检查后端是否运行');
     } finally {
       setSavingDocument(false);
     }
@@ -524,17 +594,21 @@ function App() {
   const handleUpdateDocument = async () => {
     if (!documentStock || !selectedDocument) return;
     const title = editDocTitle.trim();
-    const content = editDocContent.trim();
-    if (!title || !content) return;
+    const rawContent = (editDocContentRef.current || editDocContent).trim();
+    if (!title) { setDocSaveError('请填写日志标题'); return; }
+    if (!rawContent) { setDocSaveError('日志内容不能为空'); return; }
 
+    setDocSaveError('');
     setSavingDocument(true);
     try {
+      const content = await processImagesBeforeSave(rawContent);
       const res = await updateStockDocument(documentStock.id, selectedDocument.id, { title, content });
       setDocuments(prev => prev.map(d => d.id === res.data.id ? res.data : d));
       setSelectedDocument(res.data);
       setDocViewMode('read');
     } catch (e) {
       console.error('Failed to update document', e);
+      setDocSaveError('保存失败，请检查后端是否运行');
     } finally {
       setSavingDocument(false);
     }
@@ -591,6 +665,7 @@ function App() {
 
   const displayedStocks = useMemo(() => {
     if (marketFilter === 'all') return stocks;
+    if (marketFilter === 'OTHER') return stocks.filter(s => s.market && s.market !== 'CN' && s.market !== 'US');
     return stocks.filter(s => (s.market || 'CN') === marketFilter);
   }, [stocks, marketFilter]);
 
@@ -599,6 +674,9 @@ function App() {
       {/* Header */}
       <header className="glass-header">
         <div className="header-left">
+          {onGoHome && (
+            <button className="icon-btn" onClick={onGoHome} title="返回主页">⌂</button>
+          )}
           <h1 className="app-title">Stock Info</h1>
         </div>
         <div className="header-right">
@@ -615,13 +693,13 @@ function App() {
           <div className="sidebar-section">
             <div className="section-header"><h3>市场</h3></div>
             <div className="market-filter-group">
-              {(['all', 'CN', 'US'] as const).map(m => (
+              {(['all', 'CN', 'US', 'OTHER'] as const).map(m => (
                 <button
                   key={m}
                   className={`market-filter-btn ${marketFilter === m ? 'active' : ''}`}
                   onClick={() => setMarketFilter(m)}
                 >
-                  {m === 'all' ? '全部' : m === 'CN' ? 'A股' : '美股'}
+                  {m === 'all' ? '全部' : m === 'CN' ? 'A股' : m === 'US' ? '美股' : '其他'}
                 </button>
               ))}
             </div>
@@ -718,7 +796,6 @@ function App() {
                   <tr>
                     <th>代码</th>
                     <th>名称</th>
-                    <th>分类</th>
                     <th>备注</th>
                     <th>操作</th>
                   </tr>
@@ -730,23 +807,20 @@ function App() {
                         <span className={`market-badge market-badge-${(stock.market || 'CN').toLowerCase()}`}>{stock.market || 'CN'}</span>
                         {stock.code}
                       </td>
-                      <td className="stock-name">{stock.name}</td>
-                      <td>
-                        <div className="stock-categories">
-                          {stock.categories?.map(cat => (
-                            <span
-                              key={cat.id}
-                              className="mini-chip"
-                              style={{ '--cat-color': cat.color || '#6366f1' } as React.CSSProperties}
-                            >
-                              <span className="mini-chip-dot" />
-                              {cat.name}
-                            </span>
-                          ))}
-                          {(!stock.categories || stock.categories.length === 0) && (
-                            <span className="no-cat">未分类</span>
-                          )}
-                        </div>
+                      <td className="stock-name">
+                        <div className="stock-name-main">{stock.name}</div>
+                        {stock.categories && stock.categories.length > 0 && (
+                          <div className="stock-cat-dots">
+                            {stock.categories.map(cat => (
+                              <span
+                                key={cat.id}
+                                className="cat-dot"
+                                title={cat.name}
+                                style={{ background: cat.color || '#6366f1' } as React.CSSProperties}
+                              />
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="stock-notes">{stock.notes || '-'}</td>
                       <td className="stock-actions" onClick={e => e.stopPropagation()}>
@@ -784,7 +858,7 @@ function App() {
 
           <div className="stock-count">
             共 {displayedStocks.length} 只
-            {marketFilter !== 'all' && <span className="stock-count-market">（{marketFilter === 'CN' ? 'A股' : '美股'}）</span>}
+            {marketFilter !== 'all' && <span className="stock-count-market">（{marketFilter === 'CN' ? 'A股' : marketFilter === 'US' ? '美股' : '其他地区'}）</span>}
           </div>
         </section>
       </main>
@@ -814,15 +888,31 @@ function App() {
                   className={`market-select-btn ${newStockMarket === 'US' ? 'active' : ''}`}
                   onClick={() => { setNewStockMarket('US'); setNewStockCode(''); setNewStockName(''); setCodeSuggestions([]); setNameSuggestions([]); }}
                 >🇺🇸 美股</button>
+                <button
+                  className={`market-select-btn ${newStockMarket === 'JP' ? 'active' : ''}`}
+                  onClick={() => { setNewStockMarket('JP'); setNewStockCode(''); setNewStockName(''); setCodeSuggestions([]); setNameSuggestions([]); }}
+                >🇯🇵 日股</button>
+                <button
+                  className={`market-select-btn ${newStockMarket === 'KR' ? 'active' : ''}`}
+                  onClick={() => { setNewStockMarket('KR'); setNewStockCode(''); setNewStockName(''); setCodeSuggestions([]); setNameSuggestions([]); }}
+                >🇰🇷 韩股</button>
+                <button
+                  className={`market-select-btn ${newStockMarket === 'TW' ? 'active' : ''}`}
+                  onClick={() => { setNewStockMarket('TW'); setNewStockCode(''); setNewStockName(''); setCodeSuggestions([]); setNameSuggestions([]); }}
+                >🇹🇼 台股</button>
+                <button
+                  className={`market-select-btn ${newStockMarket === 'HK' ? 'active' : ''}`}
+                  onClick={() => { setNewStockMarket('HK'); setNewStockCode(''); setNewStockName(''); setCodeSuggestions([]); setNameSuggestions([]); }}
+                >🇭🇰 港股</button>
               </div>
             </div>
             <div className="form-group">
-              <label>{newStockMarket === 'US' ? 'Ticker' : '股票代码'}</label>
+              <label>{newStockMarket === 'US' ? 'Ticker' : newStockMarket === 'JP' ? '証券コード' : newStockMarket === 'KR' ? '종목코드' : newStockMarket === 'TW' ? '股票代碼' : newStockMarket === 'HK' ? '股票代號' : '股票代码'}</label>
               <div className="input-stack">
                 <div className="input-with-btn">
                   <input
                     type="text"
-                    placeholder={newStockMarket === 'US' ? '如 AAPL、NVDA、TSLA' : '如 600519'}
+                    placeholder={newStockMarket === 'US' ? '如 AAPL、NVDA、TSLA' : newStockMarket === 'JP' ? '如 7203 (Toyota)' : newStockMarket === 'KR' ? '如 005930 (Samsung)' : newStockMarket === 'TW' ? '如 2330 (台積電)' : newStockMarket === 'HK' ? '如 0700 (腾讯)' : '如 600519'}
                     value={newStockCode}
                     onFocus={() => setActiveSuggestField('code')}
                     onBlur={() => setTimeout(() => setActiveSuggestField(prev => (prev === 'code' ? null : prev)), 120)}
@@ -851,6 +941,7 @@ function App() {
                       >
                         <span className="suggestion-code">{item.code}</span>
                         <span className="suggestion-name">{item.name}</span>
+                        {item.exchange && <span className="suggestion-exchange">{item.exchange}</span>}
                       </button>
                     ))}
                   </div>
@@ -863,7 +954,7 @@ function App() {
                 <div className="input-with-btn">
                   <input
                     type="text"
-                    placeholder={newStockMarket === 'US' ? '如 Apple Inc.' : '如 贵州茅台'}
+                    placeholder={newStockMarket === 'US' ? '如 Apple Inc.' : newStockMarket === 'JP' ? '如 トヨタ自動車' : newStockMarket === 'KR' ? '如 삼성전자' : newStockMarket === 'TW' ? '如 台灣積體電路' : newStockMarket === 'HK' ? '如 腾讯控股' : '如 贵州茅台'}
                     value={newStockName}
                     onFocus={() => setActiveSuggestField('name')}
                     onBlur={() => setTimeout(() => setActiveSuggestField(prev => (prev === 'name' ? null : prev)), 120)}
@@ -892,6 +983,7 @@ function App() {
                       >
                         <span className="suggestion-code">{item.code}</span>
                         <span className="suggestion-name">{item.name}</span>
+                        {item.exchange && <span className="suggestion-exchange">{item.exchange}</span>}
                       </button>
                     ))}
                   </div>
@@ -1137,6 +1229,19 @@ function App() {
               <div className="profile-header-left">
                 <span className="profile-header-code">{profileStock.code}</span>
                 <span className="profile-header-name">{profileStock.name}</span>
+                <button
+                  className={`market-badge market-badge-${(profileStock.market || 'CN').toLowerCase()} market-badge-toggle`}
+                  title="点击切换市场"
+                  onClick={async () => {
+                    const ALL_MARKETS = ['CN', 'US', 'JP', 'KR', 'TW', 'HK'];
+                    const cur = profileStock.market || 'CN';
+                    const idx = ALL_MARKETS.indexOf(cur);
+                    const newMarket = ALL_MARKETS[(idx + 1) % ALL_MARKETS.length];
+                    const res = await updateStock(profileStock.id, { ...profileStock, market: newMarket });
+                    setProfileStock(res.data);
+                    setStocks(prev => prev.map(s => s.id === res.data.id ? res.data : s));
+                  }}
+                >{profileStock.market || 'CN'}</button>
                 <span className="profile-header-tag">公司档案</span>
               </div>
               <div className="profile-header-right">
@@ -1203,7 +1308,7 @@ function App() {
                         <div className="profile-section-read">
                           {section.value?.trim() ? (
                             <div className="doc-markdown-body">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{section.value}</ReactMarkdown>
+                              <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{section.value}</ReactMarkdown>
                             </div>
                           ) : (
                             <div className="profile-section-empty">
@@ -1329,8 +1434,14 @@ function App() {
                   <button className="doc-back-btn" onClick={() => setDocViewMode('list')}>‹ 返回列表</button>
                   <div className="doc-read-actions">
                     <button className="doc-action-edit" onClick={() => {
+                      const raw = selectedDocument.content;
+                      // Convert legacy Markdown to HTML for Tiptap
+                      const html = raw.trimStart().startsWith('<')
+                        ? raw
+                        : String(marked.parse(raw));
                       setEditDocTitle(selectedDocument.title);
-                      setEditDocContent(selectedDocument.content);
+                      setEditDocContent(html);
+                      editDocContentRef.current = html;
                       setDocViewMode('edit');
                     }}>编辑</button>
                     <button className="doc-action-delete" onClick={() => setPendingDeleteDoc(selectedDocument)}>删除</button>
@@ -1345,9 +1456,13 @@ function App() {
                     )}
                   </div>
                   <h1 className="doc-read-title">{selectedDocument.title}</h1>
-                  <div className="doc-markdown-body">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedDocument.content}</ReactMarkdown>
-                  </div>
+                  {selectedDocument.content.trimStart().startsWith('<') ? (
+                    <DocEditor value={selectedDocument.content} onChange={() => {}} readonly />
+                  ) : (
+                    <div className="doc-markdown-body">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{selectedDocument.content}</ReactMarkdown>
+                    </div>
+                  )}
                 </div>
 
                 <div className="modal-actions sticky-actions">
@@ -1388,24 +1503,45 @@ function App() {
                 </div>
 
                 <div className="doc-compose-body">
-                  <input
-                    className="doc-compose-title-input"
-                    type="text"
-                    placeholder="日志标题，例如：2026Q1 业绩复盘"
-                    value={editDocTitle}
-                    onChange={e => setEditDocTitle(e.target.value)}
-                    autoFocus
-                  />
-                  <div className="doc-compose-hint">支持 Markdown 语法 · 阅读时渲染</div>
-                  <textarea
-                    className="doc-compose-textarea"
-                    placeholder="开始记录…&#10;&#10;支持 Markdown：&#10;## 标题  **粗体**  *斜体*  `代码`&#10;- 列表  > 引用  ---分割线"
+                  <div className="doc-compose-title-row">
+                    <input
+                      className="doc-compose-title-input"
+                      type="text"
+                      placeholder="日志标题，例如：2026Q1 业绩复盘"
+                      value={editDocTitle}
+                      onChange={e => setEditDocTitle(e.target.value)}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="doc-insert-img-btn"
+                      title="插入图片（也可直接粘贴截图）"
+                      onClick={() => docImageInputRef.current?.click()}
+                    >🖼 插入图片</button>
+                    <input
+                      ref={docImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) insertImageIntoDoc(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </div>
+                  <DocEditor
+                    ref={docEditorRef}
                     value={editDocContent}
-                    onChange={e => setEditDocContent(e.target.value)}
+                    onChange={v => {
+                      editDocContentRef.current = v;
+                      setEditDocContent(v);
+                    }}
                   />
                 </div>
 
                 <div className="modal-actions sticky-actions">
+                  {docSaveError && <span className="doc-save-error">{docSaveError}</span>}
                   <button className="cancel-btn" onClick={() => {
                     if (docViewMode === 'edit') setDocViewMode('read');
                     else setDocViewMode('list');
@@ -1413,7 +1549,7 @@ function App() {
                   <button
                     className="confirm-btn"
                     onClick={docViewMode === 'edit' ? handleUpdateDocument : handleAddDocument}
-                    disabled={savingDocument || !editDocTitle.trim() || !editDocContent.trim()}
+                    disabled={savingDocument || !editDocTitle.trim()}
                   >{savingDocument ? '保存中...' : '保存日志'}</button>
                 </div>
               </>

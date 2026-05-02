@@ -35,6 +35,7 @@ export interface LookupResult {
 export interface LookupSuggestion {
   code: string;
   name: string;
+  exchange?: string;
 }
 
 export interface StockTimelineEntry {
@@ -75,6 +76,14 @@ export const updateStockDocument = (stockId: number, docId: number, payload: Pic
   API.put<StockDocument>(`/stocks/${stockId}/documents/${docId}`, payload);
 export const deleteStockDocument = (stockId: number, docId: number) =>
   API.delete(`/stocks/${stockId}/documents/${docId}`);
+export const uploadDocImage = async (file: File): Promise<string> => {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await API.post<{ id: number; url: string }>('/images', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data.url;
+};
 export const filterStocks = (categoryIds: number[], mode: 'union' | 'intersection') =>
   API.get<Stock[]>('/stocks/filter', { params: { categoryIds: categoryIds.join(','), mode } });
 export const searchStocks = (keyword: string) => API.get<Stock[]>('/stocks/search', { params: { keyword } });
@@ -92,3 +101,40 @@ export const lookupStockSuggest = (keyword: string, limit = 8) =>
 export const lookupUsStock = (keyword: string) => API.get<LookupResult>('/lookup/us', { params: { keyword } });
 export const lookupUsStockSuggest = (keyword: string, limit = 8) =>
   API.get<LookupSuggestion[]>('/lookup/us/suggest', { params: { keyword, limit } });
+export const lookupGlobalStockSuggest = (keyword: string, market: string, limit = 8) =>
+  API.get<Array<LookupSuggestion & { exchange?: string }>>('/lookup/global/suggest', { params: { keyword, market, limit } });
+export const lookupGlobalStock = (keyword: string, market: string) =>
+  API.get<LookupResult & { exchange?: string }>('/lookup/global', { params: { keyword, market } });
+
+// ===== Research (行业研报) APIs =====
+
+export interface Sector {
+  id: number;
+  name: string;
+}
+
+export interface SectorReport {
+  id: number;
+  sectorId: number;
+  sectorName: string;
+  title: string;
+  content: string;
+  source?: string;
+  reportDate?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getSectors = () => API.get<Sector[]>('/research/sectors');
+export const createSector = (payload: { name: string }) => API.post<Sector>('/research/sectors', payload);
+export const updateSector = (id: number, payload: { name: string }) => API.put<Sector>(`/research/sectors/${id}`, payload);
+export const deleteSector = (id: number) => API.delete(`/research/sectors/${id}`);
+
+export const getSectorReports = (sectorId: number) =>
+  API.get<SectorReport[]>(`/research/sectors/${sectorId}/reports`);
+export const createSectorReport = (sectorId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string }) =>
+  API.post<SectorReport>(`/research/sectors/${sectorId}/reports`, payload);
+export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string }) =>
+  API.put<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}`, payload);
+export const deleteSectorReport = (sectorId: number, reportId: number) =>
+  API.delete(`/research/sectors/${sectorId}/reports/${reportId}`);

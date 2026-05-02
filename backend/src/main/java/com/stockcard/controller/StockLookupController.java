@@ -1,5 +1,6 @@
 package com.stockcard.controller;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -29,6 +30,9 @@ public class StockLookupController {
     private static final long SEC_CACHE_TTL_MS = TimeUnit.HOURS.toMillis(12);
     private volatile List<Map<String, String>> secTickerCache = List.of();
     private volatile long secTickerCacheAtMs = 0L;
+
+    @Value("${app.twelvedata.api-key:}")
+    private String twelveDataApiKey;
 
     // ─────────────── A股 (EastMoney) ───────────────
 
@@ -368,6 +372,87 @@ public class StockLookupController {
             String name = String.valueOf(nameObj).trim();
             if (!code.isEmpty() && !name.isEmpty()) {
                 result.add(Map.of("code", code, "name", name));
+            }
+        }
+        return result;
+    }
+
+    // ─────────────── 全球市场 (Twelve Data) ───────────────
+
+    /**
+     * Exchange codes for each market:
+     *   JP → TSE (Tokyo), KR → KRX (Korea), TW → TWSE (Taiwan), HK → HKEX
+     */
+    private static final Map<String, String> MARKET_TO_EXCHANGE = Map.of(
+        "JP", "TSE",
+        "KR", "KRX",
+        "TW", "TWSE",
+        "HK", "HKEX"
+    );
+
+    @GetMapping("/global/suggest")
+    public ResponseEntity<List<Map<String, String>>> suggestGlobal(
+            @RequestParam String keyword,
+            @RequestParam String market,
+            @RequestParam(defaultValue = "8") int limit) {
+        try {
+            if (keyword == null || keyword.trim().isEmpty()) {
+                return ResponseEntity.ok(List.of());
+            }
+            if (twelveDataApiKey == null || twelveDataApiKey.isBlank()) {
+                return ResponseEntity.ok(List.of());
+            }
+            String exchange = MARKET_TO_EXCHANGE.get(market.toUpperCase(Locale.ROOT));
+            if (exchange == null) {
+                return ResponseEntity.ok(List.of());
+            }
+            int safeLimit = Math.min(Math.max(limit, 1), 20);
+            String encoded = URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8);
+            String url = "https://api.twelvedata.com/symbol_search?symbol=" + encoded
+                    + "&exchange=" + exchange
+                    + "&outputsize=" + safeLimit
+                    + "&apikey=" + twelveDataApiKey;
+
+            Map<?, ?> response = restTemplate.getForObject(url, Map.class);
+            return ResponseEntity.ok(parseTwelveDataResult(response, safeLimit));
+        } catch (Exception e) {
+            logger.warning("Twelve Data global suggest failed: " + e.getMessage());
+            return ResponseEntity.ok(List.of());
+        }
+    }
+
+    @GetMapping("/global")
+    public ResponseEntity<Map<String, String>> lookupGlobal(
+            @RequestParam String keyword,
+            @RequestParam String market) {
+        try {
+            List<Map<String, String>> results = suggestGlobal(keyword, market, 1).getBody();
+            if (results != null && !results.isEmpty()) {
+                return ResponseEntity.ok(results.get(0));
+            }
+            return ResponseEntity.ok(Map.of("code", "", "name", "", "error", "未找到"));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Map.of("code", "", "name", "", "error", "查询失败: " + e.getMessage()));
+        }
+    }
+
+    private List<Map<String, String>> parseTwelveDataResult(Map<?, ?> response, int limit) {
+        List<Map<String, String>> result = new ArrayList<>();
+        if (response == null) return result;
+        Object dataObj = response.get("data");
+        if (!(dataObj instanceof List<?> dataList)) return result;
+        for (Object item : dataList) {
+            if (result.size() >= limit) break;
+            if (!(item instanceof Map<?, ?> row)) continue;
+            Object symbolObj = row.get("symbol");
+            Object nameObj = row.get("instrument_name");
+            Object exchangeObj = row.get("exchange");
+            if (symbolObj == null || nameObj == null) continue;
+            String code = String.valueOf(symbolObj).trim();
+            String name = String.valueOf(nameObj).trim();
+            String exchange = exchangeObj != null ? String.valueOf(exchangeObj).trim() : "";
+            if (!code.isEmpty() && !name.isEmpty()) {
+                result.add(Map.of("code", code, "name", name, "exchange", exchange));
             }
         }
         return result;
