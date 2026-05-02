@@ -1390,7 +1390,11 @@ function App({ onGoHome }: AppProps = {}) {
                   ) : (
                     <div className="doc-list">
                       {documents.map(doc => {
-                        const preview = doc.content.replace(/[#*`>\-_~\[\]()]/g, '').trim().slice(0, 120);
+                        // Remove HTML tags if content is HTML, otherwise remove markdown syntax
+                        const cleanContent = doc.content.trimStart().startsWith('<')
+                          ? doc.content.replace(/<[^>]*>/g, '') // Strip HTML tags
+                          : doc.content.replace(/[#*`>\-_~\[\]()]/g, ''); // Strip markdown syntax
+                        const preview = cleanContent.trim().slice(0, 120);
                         const wordCount = doc.content.length;
                         const dt = new Date(doc.createdAt);
                         const timeStr = dt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
