@@ -60,7 +60,10 @@ public class ResearchController {
         if (!sectorRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
-        sectorReportRepository.deleteBySectorId(id);
+        long reportCount = sectorReportRepository.countBySectorId(id);
+        if (reportCount > 0) {
+            return ResponseEntity.status(409).build();
+        }
         sectorRepository.deleteById(id);
         return ResponseEntity.ok().build();
     }

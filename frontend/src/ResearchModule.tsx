@@ -14,6 +14,7 @@ interface ResearchModuleProps {
 export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [sectorReportCounts, setSectorReportCounts] = useState<Record<number, number>>({});
   const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
   const [reports, setReports] = useState<SectorReport[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
@@ -54,6 +55,12 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const loadSectors = useCallback(async () => {
     const res = await getSectors();
     setSectors(res.data);
+    const counts: Record<number, number> = {};
+    await Promise.all(res.data.map(async (s: Sector) => {
+      const r = await getSectorReports(s.id);
+      counts[s.id] = r.data.length;
+    }));
+    setSectorReportCounts(counts);
   }, []);
 
   useEffect(() => { loadSectors(); }, [loadSectors]);
@@ -63,6 +70,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     try {
       const res = await getSectorReports(sectorId);
       setReports(res.data);
+      setSectorReportCounts(prev => ({ ...prev, [sectorId]: res.data.length }));
     } finally {
       setLoadingReports(false);
     }
@@ -89,7 +97,12 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   };
 
   const handleDeleteSector = async (sector: Sector) => {
-    if (!window.confirm(`确定删除行业「${sector.name}」及其所有研报？此操作不可恢复。`)) return;
+    const count = sectorReportCounts[sector.id] ?? 0;
+    if (count > 0) {
+      alert(`无法删除「${sector.name}」，该行业下还有 ${count} 篇研报，请先删除所有研报后再删除行业。`);
+      return;
+    }
+    if (!window.confirm(`确定删除行业「${sector.name}」？此操作不可恢复。`)) return;
     await deleteSector(sector.id);
     if (selectedSector?.id === sector.id) setSelectedSector(null);
     await loadSectors();
