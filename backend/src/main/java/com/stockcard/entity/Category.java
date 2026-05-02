@@ -17,4 +17,7 @@ public class Category {
     private String name; // 分类名称，如 "白酒"、"新能源"
 
     private String color; // 分类颜色，用于前端显示
+
+    @Column(length = 500)
+    private String description; // 分类说明
 }

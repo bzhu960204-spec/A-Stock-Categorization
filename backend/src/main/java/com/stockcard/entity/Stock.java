@@ -56,6 +56,9 @@ public class Stock {
     @Column(columnDefinition = "CLOB")
     private String founderCeoHolding; // 创始人CEO及持股
 
+    @Column(length = 10)
+    private String market = "CN"; // CN = A股, US = 美股
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "stock_categories",

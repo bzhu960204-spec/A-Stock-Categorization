@@ -32,6 +32,7 @@ public class CategoryController {
                 .map(category -> {
                     category.setName(categoryDetails.getName());
                     category.setColor(categoryDetails.getColor());
+                    category.setDescription(categoryDetails.getDescription());
                     return ResponseEntity.ok(categoryRepository.save(category));
                 })
                 .orElse(ResponseEntity.notFound().build());

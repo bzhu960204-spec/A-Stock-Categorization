@@ -1,7 +1,7 @@
 param(
   [int]$BackendPort = 8085,
   [int]$FrontendPort = 5173,
-  [switch]$StopExisting = $true
+  [switch]$StopExisting = $false
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,6 +26,33 @@ function Stop-ListeningProcessByPort {
   }
 }
 
+function Test-PortListening {
+  param([int]$Port)
+
+  $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+  return $null -ne $connections
+}
+
+function Get-NextAvailablePort {
+  param(
+    [int]$StartPort,
+    [int[]]$ReservedPorts = @(),
+    [int]$MaxSteps = 100
+  )
+
+  $candidate = $StartPort
+  for ($i = 0; $i -le $MaxSteps; $i++) {
+    if (($ReservedPorts -contains $candidate) -or (Test-PortListening -Port $candidate)) {
+      $candidate++
+      continue
+    }
+
+    return $candidate
+  }
+
+  throw "Could not find an available port after checking $MaxSteps ports from $StartPort"
+}
+
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $backendDir = Join-Path $scriptRoot 'backend'
 $frontendDir = Join-Path $scriptRoot 'frontend'
@@ -43,20 +70,41 @@ if ($StopExisting) {
   Stop-ListeningProcessByPort -Port $FrontendPort
 }
 
-$backendCommand = "`$env:SERVER_PORT='$BackendPort'; `$env:APP_CORS_ALLOWED_ORIGINS='http://localhost:$FrontendPort'; mvn spring-boot:run"
-$frontendCommand = "`$env:BACKEND_PORT='$BackendPort'; npm run dev -- --host 0.0.0.0 --port $FrontendPort"
+$requestedBackendPort = $BackendPort
+$requestedFrontendPort = $FrontendPort
 
-Start-Process -FilePath 'powershell.exe' -WorkingDirectory $backendDir -ArgumentList @(
-  '-NoExit',
-  '-ExecutionPolicy', 'Bypass',
-  '-Command', $backendCommand
-) | Out-Null
+$BackendPort = Get-NextAvailablePort -StartPort $BackendPort
+$FrontendPort = Get-NextAvailablePort -StartPort $FrontendPort -ReservedPorts @($BackendPort)
+
+if ($BackendPort -ne $requestedBackendPort) {
+  Write-Host "Backend port $requestedBackendPort is occupied. Switched to $BackendPort"
+}
+
+if ($FrontendPort -ne $requestedFrontendPort) {
+  Write-Host "Frontend port $requestedFrontendPort is occupied. Switched to $FrontendPort"
+}
+
+Write-Host "Starting backend and frontend in this single window..."
+
+$backendJob = Start-Job -Name 'backend-dev' -ScriptBlock {
+  param([string]$Dir, [int]$Port, [int]$UiPort)
+
+  Set-Location $Dir
+  $env:SERVER_PORT = "$Port"
+  $env:APP_CORS_ALLOWED_ORIGINS = "http://localhost:$UiPort"
+
+  & mvn spring-boot:run 2>&1 | ForEach-Object { $_.ToString() }
+} -ArgumentList $backendDir, $BackendPort, $FrontendPort
 
 Write-Host "Waiting for backend to be ready on port $BackendPort..."
 $maxWait = 120
 $waited = 0
 $ready = $false
 while ($waited -lt $maxWait) {
+  Receive-Job -Job $backendJob -ErrorAction SilentlyContinue | ForEach-Object {
+    Write-Host "[backend] $_"
+  }
+
   $conn = Get-NetTCPConnection -LocalPort $BackendPort -State Listen -ErrorAction SilentlyContinue
   if ($conn) { $ready = $true; break }
   Start-Sleep -Seconds 1
@@ -70,12 +118,59 @@ if (-not $ready) {
   Write-Host "Backend is ready after ${waited}s."
 }
 
-Start-Process -FilePath 'powershell.exe' -WorkingDirectory $frontendDir -ArgumentList @(
-  '-NoExit',
-  '-ExecutionPolicy', 'Bypass',
-  '-Command', $frontendCommand
-) | Out-Null
+if (-not $ready -and $backendJob.State -in @('Completed', 'Failed', 'Stopped')) {
+  Write-Host "Backend process exited before it became ready."
+}
+
+$frontendJob = Start-Job -Name 'frontend-dev' -ScriptBlock {
+  param([string]$Dir, [int]$ApiPort, [int]$Port)
+
+  Set-Location $Dir
+  $env:BACKEND_PORT = "$ApiPort"
+
+  & npm run dev -- --host 0.0.0.0 --port $Port 2>&1 | ForEach-Object { $_.ToString() }
+} -ArgumentList $frontendDir, $BackendPort, $FrontendPort
 
 Write-Host "Started backend on http://localhost:$BackendPort"
 Write-Host "Started frontend on http://localhost:$FrontendPort"
-Write-Host 'Close each opened PowerShell window to stop the services, or run .\stop-dev.ps1'
+Write-Host 'Press Ctrl+C to stop log streaming. Services can be stopped with .\stop-dev.ps1'
+
+try {
+  while ($true) {
+    $hadOutput = $false
+
+    Receive-Job -Job $backendJob -ErrorAction SilentlyContinue | ForEach-Object {
+      $hadOutput = $true
+      Write-Host "[backend] $_"
+    }
+
+    Receive-Job -Job $frontendJob -ErrorAction SilentlyContinue | ForEach-Object {
+      $hadOutput = $true
+      Write-Host "[frontend] $_"
+    }
+
+    $backendDone = $backendJob.State -in @('Completed', 'Failed', 'Stopped')
+    $frontendDone = $frontendJob.State -in @('Completed', 'Failed', 'Stopped')
+
+    if ($backendDone -and $frontendDone) {
+      break
+    }
+
+    if (-not $hadOutput) {
+      Start-Sleep -Milliseconds 250
+    }
+  }
+}
+finally {
+  Write-Host "\nProcess states: backend=$($backendJob.State), frontend=$($frontendJob.State)"
+
+  if ($backendJob.State -notin @('Completed', 'Failed', 'Stopped')) {
+    Stop-Job -Job $backendJob -Force -ErrorAction SilentlyContinue
+  }
+
+  if ($frontendJob.State -notin @('Completed', 'Failed', 'Stopped')) {
+    Stop-Job -Job $frontendJob -Force -ErrorAction SilentlyContinue
+  }
+
+  Remove-Job -Job $backendJob, $frontendJob -Force -ErrorAction SilentlyContinue
+}

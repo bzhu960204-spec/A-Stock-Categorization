@@ -6,6 +6,7 @@ export interface Category {
   id: number;
   name: string;
   color: string;
+  description?: string;
 }
 
 export interface Stock {
@@ -13,6 +14,7 @@ export interface Stock {
   code: string;
   name: string;
   notes: string;
+  market?: 'CN' | 'US' | string;
   business?: string;
   customers?: string;
   competitors?: string;
@@ -35,6 +37,27 @@ export interface LookupSuggestion {
   name: string;
 }
 
+export interface StockTimelineEntry {
+  id: number;
+  stockId: number;
+  stockCode: string;
+  stockName: string;
+  actionType: 'CREATE' | 'UPDATE' | 'CATEGORY' | 'DELETE' | 'DOCUMENT' | string;
+  description: string;
+  createdAt: string;
+}
+
+export interface StockDocument {
+  id: number;
+  stockId: number;
+  stockCode: string;
+  stockName: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Stock APIs
 export const getStocks = () => API.get<Stock[]>('/stocks');
 export const createStock = (stock: Partial<Stock>) => API.post<Stock>('/stocks', stock);
@@ -42,6 +65,16 @@ export const updateStock = (id: number, stock: Partial<Stock>) => API.put<Stock>
 export const deleteStock = (id: number) => API.delete(`/stocks/${id}`);
 export const setStockCategories = (id: number, categoryIds: number[]) =>
   API.put<Stock>(`/stocks/${id}/categories`, categoryIds);
+export const getStockTimeline = (id: number) =>
+  API.get<StockTimelineEntry[]>(`/stocks/${id}/timeline`);
+export const getStockDocuments = (id: number) =>
+  API.get<StockDocument[]>(`/stocks/${id}/documents`);
+export const createStockDocument = (id: number, payload: Pick<StockDocument, 'title' | 'content'>) =>
+  API.post<StockDocument>(`/stocks/${id}/documents`, payload);
+export const updateStockDocument = (stockId: number, docId: number, payload: Pick<StockDocument, 'title' | 'content'>) =>
+  API.put<StockDocument>(`/stocks/${stockId}/documents/${docId}`, payload);
+export const deleteStockDocument = (stockId: number, docId: number) =>
+  API.delete(`/stocks/${stockId}/documents/${docId}`);
 export const filterStocks = (categoryIds: number[], mode: 'union' | 'intersection') =>
   API.get<Stock[]>('/stocks/filter', { params: { categoryIds: categoryIds.join(','), mode } });
 export const searchStocks = (keyword: string) => API.get<Stock[]>('/stocks/search', { params: { keyword } });
@@ -56,3 +89,6 @@ export const deleteCategory = (id: number) => API.delete(`/categories/${id}`);
 export const lookupStock = (keyword: string) => API.get<LookupResult>('/lookup', { params: { keyword } });
 export const lookupStockSuggest = (keyword: string, limit = 8) =>
   API.get<LookupSuggestion[]>('/lookup/suggest', { params: { keyword, limit } });
+export const lookupUsStock = (keyword: string) => API.get<LookupResult>('/lookup/us', { params: { keyword } });
+export const lookupUsStockSuggest = (keyword: string, limit = 8) =>
+  API.get<LookupSuggestion[]>('/lookup/us/suggest', { params: { keyword, limit } });
