@@ -61,6 +61,9 @@ public class StockController {
                     if (stockDetails.getMarket() != null) {
                         stock.setMarket(stockDetails.getMarket());
                     }
+                    if (stockDetails.getResearchValue() != null) {
+                        stock.setResearchValue(stockDetails.getResearchValue());
+                    }
 
                     Stock saved = stockRepository.save(stock);
                     String description = changedFields.isEmpty()
@@ -154,6 +157,23 @@ public class StockController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // 单独更新研究价值评级
+    @PatchMapping("/{id}/research-value")
+    public ResponseEntity<Stock> updateResearchValue(@PathVariable Long id, @RequestBody java.util.Map<String, Integer> body) {
+        Integer value = body.get("researchValue");
+        if (value == null || value < 0 || value > 5) {
+            return ResponseEntity.badRequest().build();
+        }
+        return stockRepository.findById(id)
+                .map(stock -> {
+                    stock.setResearchValue(value);
+                    Stock saved = stockRepository.save(stock);
+                    recordTimeline(saved, "UPDATE", "更新研究价值评级：" + value + " 星");
+                    return ResponseEntity.ok(saved);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     // 给股票设置分类
     @PutMapping("/{id}/categories")
     public ResponseEntity<Stock> setCategories(@PathVariable Long id, @RequestBody Set<Long> categoryIds) {
@@ -235,6 +255,7 @@ public class StockController {
         if (isChanged(current.getStructuralWeaknesses(), next.getStructuralWeaknesses())) changedFields.add("结构性弱点");
         if (isChanged(current.getFuture(), next.getFuture())) changedFields.add("面向未来");
         if (isChanged(current.getFounderCeoHolding(), next.getFounderCeoHolding())) changedFields.add("创始人CEO及持股");
+        if (!Objects.equals(current.getResearchValue(), next.getResearchValue())) changedFields.add("研究价值评级");
         return changedFields;
     }
 

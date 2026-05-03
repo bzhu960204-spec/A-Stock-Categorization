@@ -15,6 +15,7 @@ export interface Stock {
   name: string;
   notes: string;
   market?: 'CN' | 'US' | string;
+  researchValue?: number;
   business?: string;
   customers?: string;
   competitors?: string;
@@ -63,6 +64,8 @@ export interface StockDocument {
 export const getStocks = () => API.get<Stock[]>('/stocks');
 export const createStock = (stock: Partial<Stock>) => API.post<Stock>('/stocks', stock);
 export const updateStock = (id: number, stock: Partial<Stock>) => API.put<Stock>(`/stocks/${id}`, stock);
+export const updateStockResearchValue = (id: number, researchValue: number) =>
+  API.patch<Stock>(`/stocks/${id}/research-value`, { researchValue });
 export const deleteStock = (id: number) => API.delete(`/stocks/${id}`);
 export const setStockCategories = (id: number, categoryIds: number[]) =>
   API.put<Stock>(`/stocks/${id}/categories`, categoryIds);

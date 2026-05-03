@@ -59,6 +59,9 @@ public class Stock {
     @Column(length = 10)
     private String market = "CN"; // CN = A股, US = 美股
 
+    @Column(name = "research_value")
+    private Integer researchValue = 0; // 研究价值评级 0-5星
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "stock_categories",

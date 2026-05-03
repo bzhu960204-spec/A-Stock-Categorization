@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { marked } from 'marked';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
-  getStocks, createStock, deleteStock, setStockCategories, updateStock,
+  getStocks, createStock, deleteStock, setStockCategories, updateStock, updateStockResearchValue,
   getCategories, createCategory, updateCategory, deleteCategory,
   filterStocks, searchStocks, lookupStock, lookupStockSuggest, lookupUsStock, lookupUsStockSuggest,
   lookupGlobalStock, lookupGlobalStockSuggest,
@@ -87,7 +87,13 @@ function App({ onGoHome }: AppProps = {}) {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
   const [filterMode, setFilterMode] = useState<'union' | 'intersection'>('union');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [marketFilter, setMarketFilter] = useState<'all' | 'CN' | 'US' | 'OTHER'>('all');
+  const [marketFilters, setMarketFilters] = useState<Set<string>>(new Set()); // empty = show all
+  const [starFilter, setStarFilter] = useState<number | null>(null); // null = 全部, 1-5 = 至少N星
+
+  // Sidebar collapse state
+  const [marketCollapsed, setMarketCollapsed] = useState(false);
+  const [categoryCollapsed, setCategoryCollapsed] = useState(false);
+  const [starCollapsed, setStarCollapsed] = useState(false);
 
   // Add stock dialog
   const [showAddStock, setShowAddStock] = useState(false);
@@ -663,11 +669,27 @@ function App({ onGoHome }: AppProps = {}) {
     return map;
   }, [stocks]);
 
+  const KNOWN_MARKETS = ['CN', 'US', 'JP', 'KR', 'TW', 'HK'] as const;
+  const MARKET_LABEL: Record<string, string> = { CN: 'A股', US: '美股', JP: '日股', KR: '韩股', TW: '台股', HK: '港股' };
+
+  const toggleMarket = (m: string) => {
+    setMarketFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(m)) next.delete(m); else next.add(m);
+      return next;
+    });
+  };
+
   const displayedStocks = useMemo(() => {
-    if (marketFilter === 'all') return stocks;
-    if (marketFilter === 'OTHER') return stocks.filter(s => s.market && s.market !== 'CN' && s.market !== 'US');
-    return stocks.filter(s => (s.market || 'CN') === marketFilter);
-  }, [stocks, marketFilter]);
+    let result = stocks;
+    if (marketFilters.size > 0) {
+      result = result.filter(s => marketFilters.has(s.market || 'CN'));
+    }
+    if (starFilter !== null) {
+      result = result.filter(s => (s.researchValue ?? 0) >= starFilter);
+    }
+    return result;
+  }, [stocks, marketFilters, starFilter]);
 
   return (
     <div className="app-container">
@@ -689,77 +711,131 @@ function App({ onGoHome }: AppProps = {}) {
       <main className="main-layout">
         {/* Sidebar */}
         <aside className="glass-sidebar">
-          {/* Market filter */}
+          {/* Market filter — multi-select, collapsible */}
           <div className="sidebar-section">
-            <div className="section-header"><h3>市场</h3></div>
-            <div className="market-filter-group">
-              {(['all', 'CN', 'US', 'OTHER'] as const).map(m => (
-                <button
-                  key={m}
-                  className={`market-filter-btn ${marketFilter === m ? 'active' : ''}`}
-                  onClick={() => setMarketFilter(m)}
-                >
-                  {m === 'all' ? '全部' : m === 'CN' ? 'A股' : m === 'US' ? '美股' : '其他'}
-                </button>
-              ))}
+            <div className="section-header section-header-collapsible" onClick={() => setMarketCollapsed(c => !c)}>
+              <h3>
+                市场
+                {marketFilters.size > 0 && <span className="filter-badge">{marketFilters.size}</span>}
+              </h3>
+              <span className="collapse-chevron">{marketCollapsed ? '▸' : '▾'}</span>
             </div>
+            {!marketCollapsed && (
+              <div className="market-filter-group-multi">
+                {KNOWN_MARKETS.map(m => (
+                  <button
+                    key={m}
+                    className={`market-filter-chip ${marketFilters.has(m) ? 'active' : ''}`}
+                    onClick={() => toggleMarket(m)}
+                  >
+                    {MARKET_LABEL[m]}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!marketCollapsed && marketFilters.size > 0 && (
+              <div className="sidebar-filter-footer" style={{ paddingTop: 6 }}>
+                <span className="filter-active-label">已选 {marketFilters.size} 个</span>
+                <button className="clear-filter-btn" onClick={() => setMarketFilters(new Set())}>清除</button>
+              </div>
+            )}
           </div>
 
+          {/* Category filter — collapsible */}
           <div className="sidebar-section">
-            <div className="section-header">
-              <h3>分类标签</h3>
-              <button className="small-btn" onClick={() => { setShowAddCategory(true); setNewCategoryColor(pickUnusedColor()); setNewCategoryDesc(''); }}>+</button>
+            <div className="section-header section-header-collapsible" onClick={() => setCategoryCollapsed(c => !c)}>
+              <h3>
+                分类标签
+                {selectedCategoryIds.size > 0 && <span className="filter-badge">{selectedCategoryIds.size}</span>}
+              </h3>
+              <div className="section-header-right" onClick={e => e.stopPropagation()}>
+                <button className="small-btn" onClick={() => { setShowAddCategory(true); setNewCategoryColor(pickUnusedColor()); setNewCategoryDesc(''); }}>+</button>
+                <span className="collapse-chevron" onClick={() => setCategoryCollapsed(c => !c)}>{categoryCollapsed ? '▸' : '▾'}</span>
+              </div>
             </div>
-            <div className="filter-mode">
-              <button
-                className={`mode-btn ${filterMode === 'union' ? 'active' : ''}`}
-                onClick={() => setFilterMode('union')}
-                title="包含任意一个选中的分类"
-              >任一</button>
-              <button
-                className={`mode-btn ${filterMode === 'intersection' ? 'active' : ''}`}
-                onClick={() => setFilterMode('intersection')}
-                title="同时包含所有选中的分类"
-              >全部</button>
-            </div>
-            <div className="category-list">
-              {categories.map(cat => {
-                const count = categoryCounts.get(cat.id) || 0;
-                const isSelected = selectedCategoryIds.has(cat.id);
-                return (
-                  <div key={cat.id} className="category-chip-row">
+            {!categoryCollapsed && (
+              <>
+                <div className="filter-mode">
+                  <button
+                    className={`mode-btn ${filterMode === 'union' ? 'active' : ''}`}
+                    onClick={() => setFilterMode('union')}
+                    title="包含任意一个选中的分类"
+                  >任一</button>
+                  <button
+                    className={`mode-btn ${filterMode === 'intersection' ? 'active' : ''}`}
+                    onClick={() => setFilterMode('intersection')}
+                    title="同时包含所有选中的分类"
+                  >全部</button>
+                </div>
+                <div className="category-list">
+                  {categories.map(cat => {
+                    const count = categoryCounts.get(cat.id) || 0;
+                    const isSelected = selectedCategoryIds.has(cat.id);
+                    return (
+                      <div key={cat.id} className="category-chip-row">
+                        <button
+                          className={`category-chip ${isSelected ? 'selected' : ''}`}
+                          style={{ '--chip-color': cat.color || '#6366f1' } as React.CSSProperties}
+                          onClick={() => toggleCategoryFilter(cat.id)}
+                          title={cat.description || cat.name}
+                        >
+                          <span className="chip-dot" />
+                          <span className="chip-name">{cat.name}</span>
+                          {count > 0 && <span className="chip-count">{count}</span>}
+                        </button>
+                        <button
+                          className="chip-edit-btn"
+                          onClick={() => openEditCategory(cat)}
+                          title="编辑分类"
+                        >✎</button>
+                      </div>
+                    );
+                  })}
+                  {categories.length === 0 && (
+                    <p className="empty-hint">暂无分类，点击 + 添加</p>
+                  )}
+                </div>
+                {selectedCategoryIds.size > 0 && (
+                  <div className="sidebar-filter-footer">
+                    <span className="filter-active-label">已选 {selectedCategoryIds.size} 个</span>
                     <button
-                      className={`category-chip ${isSelected ? 'selected' : ''}`}
-                      style={{ '--chip-color': cat.color || '#6366f1' } as React.CSSProperties}
-                      onClick={() => toggleCategoryFilter(cat.id)}
-                      title={cat.description || cat.name}
-                    >
-                      <span className="chip-dot" />
-                      <span className="chip-name">{cat.name}</span>
-                      {count > 0 && <span className="chip-count">{count}</span>}
-                    </button>
-                    <button
-                      className="chip-edit-btn"
-                      onClick={() => openEditCategory(cat)}
-                      title="编辑分类"
-                    >✎</button>
+                      className="clear-filter-btn"
+                      onClick={() => setSelectedCategoryIds(new Set())}
+                    >清除</button>
                   </div>
-                );
-              })}
-              {categories.length === 0 && (
-                <p className="empty-hint">暂无分类，点击 + 添加</p>
-              )}
-            </div>
+                )}
+              </>
+            )}
           </div>
-          {selectedCategoryIds.size > 0 && (
-            <div className="sidebar-filter-footer">
-              <span className="filter-active-label">已选 {selectedCategoryIds.size} 个</span>
-              <button
-                className="clear-filter-btn"
-                onClick={() => setSelectedCategoryIds(new Set())}
-              >清除</button>
+
+          {/* Star rating filter — collapsible, below categories */}
+          <div className="sidebar-section">
+            <div className="section-header section-header-collapsible" onClick={() => setStarCollapsed(c => !c)}>
+              <h3>
+                研究价值
+                {starFilter !== null && <span className="filter-badge">{'★'.repeat(starFilter)}</span>}
+              </h3>
+              <span className="collapse-chevron">{starCollapsed ? '▸' : '▾'}</span>
             </div>
-          )}
+            {!starCollapsed && (
+              <div className="star-filter-group">
+                <button
+                  className={`star-filter-btn ${starFilter === null ? 'active' : ''}`}
+                  onClick={() => setStarFilter(null)}
+                >全部</button>
+                {[1, 2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    className={`star-filter-btn ${starFilter === n ? 'active' : ''}`}
+                    onClick={() => setStarFilter(starFilter === n ? null : n)}
+                    title={`至少 ${n} 星`}
+                  >
+                    {'★'.repeat(n)}{'☆'.repeat(5 - n)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </aside>
 
         {/* Content */}
@@ -797,6 +873,7 @@ function App({ onGoHome }: AppProps = {}) {
                     <th>代码</th>
                     <th>名称</th>
                     <th>备注</th>
+                    <th>研究价值</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -823,6 +900,26 @@ function App({ onGoHome }: AppProps = {}) {
                         )}
                       </td>
                       <td className="stock-notes">{stock.notes || '-'}</td>
+                      <td className="stock-research" onClick={e => e.stopPropagation()}>
+                        <div className="star-rating-inline">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <span
+                              key={n}
+                              className={`star-btn ${(stock.researchValue ?? 0) >= n ? 'filled' : ''}`}
+                              onClick={async () => {
+                                const newVal = (stock.researchValue ?? 0) === n ? 0 : n;
+                                try {
+                                  const res = await updateStockResearchValue(stock.id, newVal);
+                                  setStocks(prev => prev.map(s => s.id === stock.id ? res.data : s));
+                                } catch (e) { console.error(e); }
+                              }}
+                              title={`设为 ${n} 星`}
+                            >
+                              {(stock.researchValue ?? 0) >= n ? '★' : '☆'}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
                       <td className="stock-actions" onClick={e => e.stopPropagation()}>
                         <button
                           className="action-btn"
@@ -858,7 +955,7 @@ function App({ onGoHome }: AppProps = {}) {
 
           <div className="stock-count">
             共 {displayedStocks.length} 只
-            {marketFilter !== 'all' && <span className="stock-count-market">（{marketFilter === 'CN' ? 'A股' : marketFilter === 'US' ? '美股' : '其他地区'}）</span>}
+            {marketFilters.size > 0 && <span className="stock-count-market">（{Array.from(marketFilters).map(m => MARKET_LABEL[m] || m).join('+')}）</span>}
           </div>
         </section>
       </main>

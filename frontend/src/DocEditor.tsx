@@ -1,10 +1,77 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Table, TableHeader, TableCell } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
+
+// ── Resizable Image NodeView ──────────────────────────────────────────────────
+function ResizableImageView({ node, updateAttributes, editor }: any) {
+  const imgRef = useRef<HTMLImageElement>(null);
+  const drag = useRef({ startX: 0, startW: 0 });
+
+  const onResizeMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    drag.current.startX = e.clientX;
+    drag.current.startW = imgRef.current?.offsetWidth ?? (node.attrs.width ?? 300);
+
+    const onMove = (mv: MouseEvent) => {
+      const newW = Math.max(50, Math.round(drag.current.startW + mv.clientX - drag.current.startX));
+      updateAttributes({ width: newW });
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [updateAttributes, node.attrs.width]);
+
+  const isEditable: boolean = editor?.isEditable ?? false;
+  const w: number | null = node.attrs.width ?? null;
+
+  return (
+    <NodeViewWrapper as="div" className="doc-img-wrap" contentEditable={false}>
+      <img
+        ref={imgRef}
+        src={node.attrs.src}
+        alt={node.attrs.alt ?? ''}
+        title={node.attrs.title ?? undefined}
+        style={w ? { width: `${w}px`, maxWidth: '100%' } : { maxWidth: '100%' }}
+      />
+      {isEditable && (
+        <div className="doc-img-resize-handle" onMouseDown={onResizeMouseDown} />
+      )}
+    </NodeViewWrapper>
+  );
+}
+
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        parseHTML: el => {
+          const raw = el.getAttribute('width') || el.style.width;
+          if (!raw) return null;
+          const n = parseInt(raw, 10);
+          return isNaN(n) ? null : n;
+        },
+        renderHTML: attrs => {
+          if (!attrs.width) return {};
+          return { width: String(attrs.width), style: `width:${attrs.width}px` };
+        },
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView);
+  },
+});
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface DocEditorHandle {
   insertImage: (src: string) => void;
@@ -23,7 +90,7 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
     const editor = useEditor({
       extensions: [
         StarterKit,
-        Image.configure({ inline: false, allowBase64: true }),
+        ResizableImage.configure({ inline: false, allowBase64: true }),
         Placeholder.configure({ placeholder: '开始记录…支持粘贴图片、加粗、标题、列表、表格等' }),
         Table.configure({ resizable: false }),
         TableRow,
