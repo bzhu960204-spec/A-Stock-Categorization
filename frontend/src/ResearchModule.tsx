@@ -139,7 +139,8 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   };
 
   const handleSaveReport = async () => {
-    if (!selectedSector || !editTitle.trim()) return;
+    if (!selectedSector) return;
+    if (!editTitle.trim()) { setSaveError('请填写报告标题'); return; }
     setSavingReport(true);
     setSaveError('');
     try {
@@ -351,7 +352,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                       className="rp-modal-title-input"
                       placeholder="报告标题 *"
                       value={editTitle}
-                      onChange={e => setEditTitle(e.target.value)}
+                      onChange={e => { setEditTitle(e.target.value); if (saveError) setSaveError(''); }}
                       autoFocus
                     />
                     <div className="rp-modal-meta-inputs">
@@ -375,7 +376,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                       onClick={() => { if (modalReport) setModalMode('read'); else closeModal(); }}
                       disabled={savingReport}>取消</button>
                     <button className="confirm-btn" onClick={handleSaveReport}
-                      disabled={savingReport || !editTitle.trim()}>
+                      disabled={savingReport}>
                       {savingReport ? '保存中…' : '保存研报'}
                     </button>
                     <button className="icon-btn" onClick={closeModal}>✕</button>

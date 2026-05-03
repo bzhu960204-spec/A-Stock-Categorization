@@ -185,7 +185,9 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
             {btn('⊞', () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), false, '插入表格')}
           </div>
         )}
-        <EditorContent editor={editor} className="doc-editor-content" />
+        <div className="doc-editor-scroll">
+          <EditorContent editor={editor} className="doc-editor-content" />
+        </div>
       </div>
     );
   }

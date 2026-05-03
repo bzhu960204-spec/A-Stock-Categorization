@@ -1595,63 +1595,70 @@ function App({ onGoHome }: AppProps = {}) {
             {/* ---- Compose / Edit View ---- */}
             {(docViewMode === 'compose' || docViewMode === 'edit') && (
               <>
-                <div className="doc-modal-header">
-                  <button className="doc-back-btn" onClick={() => {
-                    if (docViewMode === 'edit') { setDocViewMode('read'); }
-                    else { setDocViewMode('list'); }
-                  }}>‹ {docViewMode === 'edit' ? '返回阅读' : '返回列表'}</button>
-                  <h2 className="doc-compose-heading">{docViewMode === 'edit' ? '编辑日志' : '新建日志'}</h2>
+                <div className="rp-modal-header">
+                  <div className="rp-modal-header-left doc-compose-edit-meta">
+                    <div className="doc-compose-header-top">
+                      <button className="doc-back-btn" onClick={() => {
+                        if (docViewMode === 'edit') { setDocViewMode('read'); }
+                        else { setDocViewMode('list'); }
+                      }}>‹ {docViewMode === 'edit' ? '返回阅读' : '返回列表'}</button>
+                      <span className="rp-modal-title-display" style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        {docViewMode === 'edit' ? '编辑日志' : '新建日志'}
+                      </span>
+                    </div>
+                    <div className="doc-compose-title-row">
+                      <input
+                        className="rp-modal-title-input"
+                        type="text"
+                        placeholder="日志标题，例如：2026Q1 业绩复盘"
+                        value={editDocTitle}
+                        onChange={e => { setEditDocTitle(e.target.value); if (docSaveError) setDocSaveError(''); }}
+                        autoFocus
+                      />
+                      <button
+                        type="button"
+                        className="doc-insert-img-btn"
+                        title="插入图片（也可直接粘贴截图）"
+                        onClick={() => docImageInputRef.current?.click()}
+                      >🖼 插入图片</button>
+                      <input
+                        ref={docImageInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) insertImageIntoDoc(file);
+                          e.target.value = '';
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="rp-modal-header-right">
+                    {docSaveError && <span className="doc-save-error" style={{ flex: 'unset' }}>{docSaveError}</span>}
+                    <button className="cancel-btn" onClick={() => {
+                      if (docViewMode === 'edit') setDocViewMode('read');
+                      else setDocViewMode('list');
+                    }} disabled={savingDocument}>取消</button>
+                    <button
+                      className="confirm-btn"
+                      onClick={docViewMode === 'edit' ? handleUpdateDocument : handleAddDocument}
+                      disabled={savingDocument}
+                    >{savingDocument ? '保存中...' : '保存日志'}</button>
+                  </div>
                 </div>
 
-                <div className="doc-compose-body">
-                  <div className="doc-compose-title-row">
-                    <input
-                      className="doc-compose-title-input"
-                      type="text"
-                      placeholder="日志标题，例如：2026Q1 业绩复盘"
-                      value={editDocTitle}
-                      onChange={e => setEditDocTitle(e.target.value)}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      className="doc-insert-img-btn"
-                      title="插入图片（也可直接粘贴截图）"
-                      onClick={() => docImageInputRef.current?.click()}
-                    >🖼 插入图片</button>
-                    <input
-                      ref={docImageInputRef}
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={e => {
-                        const file = e.target.files?.[0];
-                        if (file) insertImageIntoDoc(file);
-                        e.target.value = '';
+                <div className="rp-modal-body">
+                  <div className="rp-modal-editor-wrap">
+                    <DocEditor
+                      ref={docEditorRef}
+                      value={editDocContent}
+                      onChange={v => {
+                        editDocContentRef.current = v;
+                        setEditDocContent(v);
                       }}
                     />
                   </div>
-                  <DocEditor
-                    ref={docEditorRef}
-                    value={editDocContent}
-                    onChange={v => {
-                      editDocContentRef.current = v;
-                      setEditDocContent(v);
-                    }}
-                  />
-                </div>
-
-                <div className="modal-actions sticky-actions">
-                  {docSaveError && <span className="doc-save-error">{docSaveError}</span>}
-                  <button className="cancel-btn" onClick={() => {
-                    if (docViewMode === 'edit') setDocViewMode('read');
-                    else setDocViewMode('list');
-                  }} disabled={savingDocument}>取消</button>
-                  <button
-                    className="confirm-btn"
-                    onClick={docViewMode === 'edit' ? handleUpdateDocument : handleAddDocument}
-                    disabled={savingDocument || !editDocTitle.trim()}
-                  >{savingDocument ? '保存中...' : '保存日志'}</button>
                 </div>
               </>
             )}
