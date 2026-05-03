@@ -19,30 +19,107 @@ const PRESET_COLORS = [
   '#06b6d4', '#3b82f6', '#64748b', '#a855f7',
 ];
 
-type AutoResizeTextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+
+// ── Markdown Toolbar ──────────────────────────────────────────────────────────
+interface MarkdownEditorProps {
   value: string;
-};
+  onChange: (val: string) => void;
+  placeholder?: string;
+}
 
-function AutoResizeTextarea({ value, className, ...props }: AutoResizeTextareaProps) {
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Auto-resize
   useEffect(() => {
-    const element = textareaRef.current;
-    if (!element) return;
-
-    element.style.height = '0px';
-    element.style.height = `${Math.max(element.scrollHeight, 110)}px`;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = '0px';
+    el.style.height = `${Math.max(el.scrollHeight, 140)}px`;
   }, [value]);
 
+  const wrapSelection = (before: string, after: string = before) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const selected = value.slice(start, end);
+    const newVal = value.slice(0, start) + before + selected + after + value.slice(end);
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(start + before.length, end + before.length);
+    });
+  };
+
+  const insertLinePrefix = (prefix: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    const newVal = value.slice(0, lineStart) + prefix + value.slice(lineStart);
+    onChange(newVal);
+    requestAnimationFrame(() => {
+      el.focus();
+      const newPos = start + prefix.length;
+      el.setSelectionRange(newPos, newPos);
+    });
+  };
+
+  const insertBlock = (text: string) => {
+    const el = textareaRef.current;
+    if (!el) return;
+    const start = el.selectionStart;
+    const before = start > 0 && value[start - 1] !== '\n' ? '\n\n' : '';
+    const newVal = value.slice(0, start) + before + text + '\n\n' + value.slice(start);
+    onChange(newVal);
+    const insertOffset = start + before.length + text.length + 2;
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(insertOffset, insertOffset);
+    });
+  };
+
+  const btn = (label: string, action: () => void, title: string) => (
+    <button
+      type="button"
+      className="md-tb-btn"
+      onMouseDown={e => { e.preventDefault(); action(); }}
+      title={title}
+    >{label}</button>
+  );
+
   return (
-    <textarea
-      ref={textareaRef}
-      value={value}
-      className={["profile-textarea", className].filter(Boolean).join(' ')}
-      {...props}
-    />
+    <div className="md-editor-wrap">
+      <div className="md-toolbar">
+        {btn('B', () => wrapSelection('**'), '加粗')}
+        {btn('I', () => wrapSelection('*'), '斜体')}
+        {btn('S', () => wrapSelection('~~'), '删除线')}
+        <span className="md-tb-sep" />
+        {btn('H1', () => insertLinePrefix('# '), '一级标题')}
+        {btn('H2', () => insertLinePrefix('## '), '二级标题')}
+        {btn('H3', () => insertLinePrefix('### '), '三级标题')}
+        <span className="md-tb-sep" />
+        {btn('•', () => insertLinePrefix('- '), '无序列表')}
+        {btn('1.', () => insertLinePrefix('1. '), '有序列表')}
+        {btn('❝', () => insertLinePrefix('> '), '引用')}
+        {btn('`', () => wrapSelection('`'), '行内代码')}
+        {btn('```', () => insertBlock('```\n\n```'), '代码块')}
+        <span className="md-tb-sep" />
+        {btn('—', () => insertBlock('---'), '分割线')}
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="profile-textarea md-textarea"
+        spellCheck={false}
+      />
+    </div>
   );
 }
+// ─────────────────────────────────────────────────────────────────────────────
 
 function groupEntriesByDay(entries: StockTimelineEntry[]) {
   const map = new Map<string, StockTimelineEntry[]>();
@@ -157,17 +234,7 @@ function App({ onGoHome }: AppProps = {}) {
   const editDocContentRef = useRef('');  // always tracks latest content even if state lags
   const [docSaveError, setDocSaveError] = useState('');
   const [savingDocument, setSavingDocument] = useState(false);
-  const docImageInputRef = useRef<HTMLInputElement>(null);
   const docEditorRef = useRef<DocEditorHandle>(null);
-
-  const insertImageIntoDoc = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const src = e.target?.result as string;
-      docEditorRef.current?.insertImage(src);
-    };
-    reader.readAsDataURL(file);
-  };
 
   // Before saving: upload any data: URIs to the backend and replace with real URLs
   const processImagesBeforeSave = async (html: string): Promise<string> => {
@@ -357,7 +424,7 @@ function App({ onGoHome }: AppProps = {}) {
 
       const formatImportedText = (value: string) =>
         value
-          .replace(/([;；。：:])\s*/g, '$1\n\n')
+          .replace(/([;；。])\s*/g, '$1\n\n')
           .replace(/\n{3,}/g, '\n\n')
           .trim();
 
@@ -1415,10 +1482,9 @@ function App({ onGoHome }: AppProps = {}) {
                           )}
                         </div>
                       ) : (
-                        <AutoResizeTextarea
-                          className="profile-edit-textarea"
+                        <MarkdownEditor
                           value={profileDraft[section.key as keyof typeof profileDraft]}
-                          onChange={e => setProfileDraft(prev => ({ ...prev, [section.key]: e.target.value }))}
+                          onChange={val => setProfileDraft(prev => ({ ...prev, [section.key]: val }))}
                           placeholder={section.placeholder}
                         />
                       )}
@@ -1615,23 +1681,7 @@ function App({ onGoHome }: AppProps = {}) {
                         onChange={e => { setEditDocTitle(e.target.value); if (docSaveError) setDocSaveError(''); }}
                         autoFocus
                       />
-                      <button
-                        type="button"
-                        className="doc-insert-img-btn"
-                        title="插入图片（也可直接粘贴截图）"
-                        onClick={() => docImageInputRef.current?.click()}
-                      >🖼 插入图片</button>
-                      <input
-                        ref={docImageInputRef}
-                        type="file"
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        onChange={e => {
-                          const file = e.target.files?.[0];
-                          if (file) insertImageIntoDoc(file);
-                          e.target.value = '';
-                        }}
-                      />
+
                     </div>
                   </div>
                   <div className="rp-modal-header-right">
