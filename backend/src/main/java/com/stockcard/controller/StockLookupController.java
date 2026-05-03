@@ -1,6 +1,5 @@
 package com.stockcard.controller;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -31,8 +30,11 @@ public class StockLookupController {
     private volatile List<Map<String, String>> secTickerCache = List.of();
     private volatile long secTickerCacheAtMs = 0L;
 
-    @Value("${app.twelvedata.api-key:}")
-    private String twelveDataApiKey;
+    private final ConfigController configController;
+
+    public StockLookupController(ConfigController configController) {
+        this.configController = configController;
+    }
 
     // ─────────────── A股 (EastMoney) ───────────────
 
@@ -399,6 +401,7 @@ public class StockLookupController {
             if (keyword == null || keyword.trim().isEmpty()) {
                 return ResponseEntity.ok(List.of());
             }
+            String twelveDataApiKey = configController.resolveApiKey();
             if (twelveDataApiKey == null || twelveDataApiKey.isBlank()) {
                 return ResponseEntity.ok(List.of());
             }

@@ -66,6 +66,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--text-primary);
+  position: relative;
 }
 
 /* ===== Header ===== */
@@ -2743,6 +2744,75 @@ body {
   font-size: 0.76rem;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+/* ===== Home Settings Panel ===== */
+.home-settings-panel {
+  position: absolute;
+  top: calc(var(--header-h, 52px) + 4px);
+  right: 16px;
+  width: 360px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-bright);
+  border-top: 2px solid var(--accent);
+  border-radius: 2px;
+  padding: 14px 18px 16px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+  z-index: 300;
+  animation: slideUp 0.15s ease;
+}
+.home-settings-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+.home-settings-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.home-settings-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.04em;
+}
+.home-settings-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.home-settings-input {
+  flex: 1;
+  background: var(--input-bg);
+  border: 1px solid var(--border-mid);
+  border-radius: 3px;
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  padding: 5px 10px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.home-settings-input:focus { border-color: var(--accent); }
+.home-settings-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.home-settings-hint a { color: var(--accent); text-decoration: underline; }
+.home-settings-ok {
+  font-size: 0.75rem;
+  color: var(--success, #4ade80);
+  font-weight: 600;
+}
+.home-settings-err {
+  font-size: 0.75rem;
+  color: var(--danger, #ef4444);
 }
 
 /* ===== Research Module ===== */

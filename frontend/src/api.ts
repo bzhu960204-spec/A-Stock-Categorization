@@ -141,3 +141,11 @@ export const updateSectorReport = (sectorId: number, reportId: number, payload: 
   API.put<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}`, payload);
 export const deleteSectorReport = (sectorId: number, reportId: number) =>
   API.delete(`/research/sectors/${sectorId}/reports/${reportId}`);
+
+// ===== Config APIs =====
+export interface AppConfig {
+  twelvedataApiKey: string;
+  twelvedataApiKeyMasked: string;
+}
+export const getConfig = () => API.get<AppConfig>('/config');
+export const saveConfig = (config: { twelvedataApiKey: string }) => API.put<{ status: string; twelvedataApiKey: string }>('/config', config);
