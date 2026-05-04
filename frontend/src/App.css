@@ -1578,6 +1578,14 @@ body {
   padding: 4px 0;
   min-height: unset;
 }
+/* In readonly mode, remove nested scroll containers so the parent can scroll freely */
+.doc-tiptap-wrap.readonly {
+  overflow: visible;
+}
+.doc-tiptap-wrap.readonly .doc-editor-scroll {
+  overflow: visible;
+  overscroll-behavior: auto;
+}
 .doc-tiptap-wrap .ProseMirror > * + * { margin-top: 0.5em; }
 .doc-tiptap-wrap .ProseMirror p { margin: 0.4em 0; color: var(--text-secondary); }
 .doc-tiptap-wrap .ProseMirror h1 { font-size: 1.5rem; font-weight: 700; color: var(--text-primary); margin: 1.2em 0 0.4em; }
@@ -3177,9 +3185,7 @@ body {
 .rp-modal-read-content {
   flex: 1;
   overflow-y: auto;
-  padding: 32px 48px;
-  max-width: 800px;
-  margin: 0 auto;
+  padding: 32px max(48px, calc((100% - 800px) / 2));
   width: 100%;
   line-height: 1.75;
   font-size: 0.95rem;
