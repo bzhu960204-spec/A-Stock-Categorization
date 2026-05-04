@@ -124,6 +124,7 @@ export interface SectorReport {
   content: string;
   source?: string;
   reportDate?: string;
+  rating: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -137,8 +138,10 @@ export const getSectorReports = (sectorId: number) =>
   API.get<SectorReport[]>(`/research/sectors/${sectorId}/reports`);
 export const createSectorReport = (sectorId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string }) =>
   API.post<SectorReport>(`/research/sectors/${sectorId}/reports`, payload);
-export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string }) =>
+export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; rating?: number }) =>
   API.put<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}`, payload);
+export const updateSectorReportRating = (sectorId: number, reportId: number, rating: number) =>
+  API.patch<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}/rating`, { rating });
 export const deleteSectorReport = (sectorId: number, reportId: number) =>
   API.delete(`/research/sectors/${sectorId}/reports/${reportId}`);
 

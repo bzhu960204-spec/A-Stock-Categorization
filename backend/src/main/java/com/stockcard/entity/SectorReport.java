@@ -31,6 +31,9 @@ public class SectorReport {
     @Column
     private String reportDate; // 报告日期，如 "2026-04-01"
 
+    @Column(nullable = false, columnDefinition = "integer default 0")
+    private int rating = 0; // 评星 0-5
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

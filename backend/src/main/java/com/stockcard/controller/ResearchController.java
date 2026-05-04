@@ -77,6 +77,13 @@ public class ResearchController {
         private String content;
         private String source;
         private String reportDate;
+        private Integer rating;
+    }
+
+    @Data
+    @NoArgsConstructor
+    static class RatingPayload {
+        private Integer rating;
     }
 
     @Data
@@ -88,6 +95,7 @@ public class ResearchController {
         private String content;
         private String source;
         private String reportDate;
+        private int rating;
         private String createdAt;
         private String updatedAt;
 
@@ -100,6 +108,7 @@ public class ResearchController {
             dto.content = r.getContent();
             dto.source = r.getSource();
             dto.reportDate = r.getReportDate();
+            dto.rating = r.getRating();
             dto.createdAt = r.getCreatedAt() != null ? r.getCreatedAt().toString() : null;
             dto.updatedAt = r.getUpdatedAt() != null ? r.getUpdatedAt().toString() : null;
             return dto;
@@ -129,6 +138,7 @@ public class ResearchController {
                     report.setContent(payload.getContent());
                     report.setSource(payload.getSource());
                     report.setReportDate(payload.getReportDate());
+                    if (payload.getRating() != null) report.setRating(Math.max(0, Math.min(5, payload.getRating())));
                     return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
                 })
                 .orElse(ResponseEntity.notFound().build());
@@ -148,6 +158,24 @@ public class ResearchController {
                     report.setContent(payload.getContent());
                     report.setSource(payload.getSource());
                     report.setReportDate(payload.getReportDate());
+                    if (payload.getRating() != null) report.setRating(Math.max(0, Math.min(5, payload.getRating())));
+                    return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/sectors/{sectorId}/reports/{reportId}/rating")
+    public ResponseEntity<ReportDto> updateReportRating(
+            @PathVariable Long sectorId,
+            @PathVariable Long reportId,
+            @RequestBody RatingPayload payload) {
+        if (payload.getRating() == null || payload.getRating() < 0 || payload.getRating() > 5) {
+            return ResponseEntity.badRequest().build();
+        }
+        return sectorReportRepository.findById(reportId)
+                .filter(r -> r.getSector().getId().equals(sectorId))
+                .map(report -> {
+                    report.setRating(payload.getRating());
                     return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
                 })
                 .orElse(ResponseEntity.notFound().build());

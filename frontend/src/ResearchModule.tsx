@@ -1,8 +1,9 @@
-﻿import { useState, useEffect, useCallback, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
   getSectors, createSector, updateSector, deleteSector,
   getSectorReports, createSectorReport, updateSectorReport, deleteSectorReport,
+  updateSectorReportRating,
   type Sector, type SectorReport,
 } from './api';
 import './App.css';
@@ -28,6 +29,10 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'read' | 'edit'>('read');
   const [modalReport, setModalReport] = useState<SectorReport | null>(null);
+
+  // Search & filter
+  const [search, setSearch] = useState('');
+  const [starFilter, setStarFilter] = useState(0); // 0 = all, 1-5 = at least N stars
 
   // Edit form state (inside modal)
   const [editTitle, setEditTitle] = useState('');
@@ -71,7 +76,23 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   useEffect(() => {
     if (selectedSector) loadReports(selectedSector.id);
     else setReports([]);
+    setSearch('');
+    setStarFilter(0);
   }, [selectedSector, loadReports]);
+
+  const filteredReports = useMemo(() => {
+    let list = reports;
+    if (starFilter > 0) list = list.filter(r => (r.rating ?? 0) >= starFilter);
+    if (search.trim()) {
+      const kw = search.trim().toLowerCase();
+      list = list.filter(r =>
+        r.title.toLowerCase().includes(kw) ||
+        (r.source ?? '').toLowerCase().includes(kw) ||
+        (r.reportDate ?? '').includes(kw)
+      );
+    }
+    return list;
+  }, [reports, search, starFilter]);
 
   const handleAddSector = async () => {
     if (!newSectorName.trim()) return;
@@ -177,6 +198,17 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     if (modalReport?.id === report.id) closeModal();
   };
 
+  const handleRating = async (report: SectorReport, n: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!selectedSector) return;
+    const newRating = (report.rating ?? 0) === n ? 0 : n;
+    try {
+      const res = await updateSectorReportRating(selectedSector.id, report.id, newRating);
+      setReports(prev => prev.map(r => r.id === report.id ? res.data : r));
+      if (modalReport?.id === report.id) setModalReport(res.data);
+    } catch (err) { console.error(err); }
+  };
+
   const stripHtml = (html: string) =>
     html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
 
@@ -274,9 +306,29 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
             <div className="rp-list-wrap">
               <div className="rp-toolbar">
                 <span className="rp-toolbar-title">{selectedSector.name}</span>
-                <span className="rp-toolbar-count">{reports.length} 篇</span>
+                <span className="rp-toolbar-count">{filteredReports.length}/{reports.length} 篇</span>
                 <div style={{ flex: 1 }} />
                 <button className="rp-new-btn" onClick={openNewModal}>+ 新增研报</button>
+              </div>
+              <div className="rp-filter-bar">
+                <input
+                  className="rp-search-input"
+                  placeholder="搜索标题 / 来源 / 日期…"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                <div className="rp-star-filters">
+                  {[0, 1, 2, 3, 4, 5].map(n => (
+                    <button
+                      key={n}
+                      className={`rp-star-filter-btn${starFilter === n ? ' active' : ''}`}
+                      onClick={() => setStarFilter(n)}
+                      title={n === 0 ? '全部' : `${n}星及以上`}
+                    >
+                      {n === 0 ? '全部' : `${'★'.repeat(n)}`}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {loadingReports ? (
@@ -286,9 +338,11 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                   <span style={{ fontSize: '2rem' }}>📋</span>
                   <span>暂无研报，点击「新增研报」开始记录</span>
                 </div>
+              ) : filteredReports.length === 0 ? (
+                <div className="research-empty-state">无匹配结果</div>
               ) : (
                 <div className="rp-list">
-                  {reports.map(report => (
+                  {filteredReports.map(report => (
                     <div key={report.id} className="rp-row" onClick={() => openReadModal(report)}>
                       <div className="rp-row-main">
                         <span className="rp-row-title">{report.title}</span>
@@ -297,9 +351,17 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                         </span>
                       </div>
                       <div className="rp-row-right">
-                        <div className="rp-row-tags">
-                          {report.source && <span className="research-meta-tag">{report.source}</span>}
-                          {report.reportDate && <span className="research-meta-tag">{report.reportDate}</span>}
+                        <div className="rp-row-stars" onClick={e => e.stopPropagation()}>
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <span
+                              key={n}
+                              className={`star-btn${(report.rating ?? 0) >= n ? ' filled' : ''}`}
+                              onClick={e => handleRating(report, n, e)}
+                              title={`设为 ${n} 星`}
+                            >
+                              {(report.rating ?? 0) >= n ? '★' : '☆'}
+                            </span>
+                          ))}
                         </div>
                         <span className="rp-row-date">
                           {new Date(report.createdAt).toLocaleDateString('zh-CN')}
@@ -331,6 +393,18 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                   <div className="rp-modal-header-left">
                     <span className="rp-modal-title-display">{modalReport?.title}</span>
                     <div className="rp-modal-meta">
+                      <div className="star-rating-inline" onClick={e => e.stopPropagation()}>
+                        {[1, 2, 3, 4, 5].map(n => (
+                          <span
+                            key={n}
+                            className={`star-btn${(modalReport?.rating ?? 0) >= n ? ' filled' : ''}`}
+                            onClick={e => modalReport && handleRating(modalReport, n, e)}
+                            title={`设为 ${n} 星`}
+                          >
+                            {(modalReport?.rating ?? 0) >= n ? '★' : '☆'}
+                          </span>
+                        ))}
+                      </div>
                       {modalReport?.source && <span className="research-meta-tag">{modalReport.source}</span>}
                       {modalReport?.reportDate && <span className="research-meta-tag">{modalReport.reportDate}</span>}
                       {modalReport?.createdAt && (

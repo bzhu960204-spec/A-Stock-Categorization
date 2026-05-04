@@ -218,16 +218,27 @@ public class StockController {
         return stockRepository.findByAnyCategoryIds(categoryIds);
     }
 
-    // 搜索股票
+    // 搜索股票（代码、名称及所有档案字段，内存过滤）
     @GetMapping("/search")
     public List<Stock> searchStocks(@RequestParam String keyword) {
-        List<Stock> byName = stockRepository.findByNameContaining(keyword);
-        stockRepository.findByCode(keyword).ifPresent(s -> {
-            if (byName.stream().noneMatch(st -> st.getId().equals(s.getId()))) {
-                byName.add(0, s);
-            }
-        });
-        return byName;
+        String kw = keyword.trim().toLowerCase();
+        if (kw.isEmpty()) return stockRepository.findAll();
+        return stockRepository.findAll().stream()
+            .filter(s -> contains(s.getCode(), kw)
+                      || contains(s.getName(), kw)
+                      || contains(s.getNotes(), kw)
+                      || contains(s.getBusiness(), kw)
+                      || contains(s.getCustomers(), kw)
+                      || contains(s.getCompetitors(), kw)
+                      || contains(s.getStrengths(), kw)
+                      || contains(s.getStructuralWeaknesses(), kw)
+                      || contains(s.getFuture(), kw)
+                      || contains(s.getFounderCeoHolding(), kw))
+            .collect(java.util.stream.Collectors.toList());
+    }
+
+    private static boolean contains(String field, String kw) {
+        return field != null && field.toLowerCase().contains(kw);
     }
 
     private void recordTimeline(Stock stock, String actionType, String description) {
