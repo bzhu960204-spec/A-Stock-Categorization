@@ -51,6 +51,7 @@ public class StockController {
                     stock.setName(stockDetails.getName());
                     stock.setCode(stockDetails.getCode());
                     stock.setNotes(stockDetails.getNotes());
+                    stock.setRecommender(stockDetails.getRecommender());
                     stock.setBusiness(stockDetails.getBusiness());
                     stock.setCustomers(stockDetails.getCustomers());
                     stock.setCompetitors(stockDetails.getCompetitors());
@@ -227,6 +228,7 @@ public class StockController {
             .filter(s -> contains(s.getCode(), kw)
                       || contains(s.getName(), kw)
                       || contains(s.getNotes(), kw)
+                      || contains(s.getRecommender(), kw)
                       || contains(s.getBusiness(), kw)
                       || contains(s.getCustomers(), kw)
                       || contains(s.getCompetitors(), kw)
@@ -259,6 +261,7 @@ public class StockController {
         if (isChanged(current.getCode(), next.getCode())) changedFields.add("代码");
         if (isChanged(current.getName(), next.getName())) changedFields.add("名称");
         if (isChanged(current.getNotes(), next.getNotes())) changedFields.add("补充备注");
+        if (isChanged(current.getRecommender(), next.getRecommender())) changedFields.add("推荐人");
         if (isChanged(current.getBusiness(), next.getBusiness())) changedFields.add("业务");
         if (isChanged(current.getCustomers(), next.getCustomers())) changedFields.add("客户");
         if (isChanged(current.getCompetitors(), next.getCompetitors())) changedFields.add("竞争对手");

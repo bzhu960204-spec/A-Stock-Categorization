@@ -16,6 +16,7 @@ export interface Stock {
   notes: string;
   market?: 'CN' | 'US' | string;
   researchValue?: number;
+  recommender?: string;
   business?: string;
   customers?: string;
   competitors?: string;

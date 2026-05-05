@@ -212,6 +212,12 @@ function App({ onGoHome }: AppProps = {}) {
   const [pendingDeleteStock, setPendingDeleteStock] = useState<Stock | null>(null);
   const [deletingStock, setDeletingStock] = useState(false);
 
+  // Basic info editor
+  const [editBasicInfoOpen, setEditBasicInfoOpen] = useState(false);
+  const [editBasicInfoStock, setEditBasicInfoStock] = useState<Stock | null>(null);
+  const [basicInfoDraft, setBasicInfoDraft] = useState({ name: '', code: '', market: 'CN', recommender: '' });
+  const [savingBasicInfo, setSavingBasicInfo] = useState(false);
+
   // Detail stock
   const [profileStock, setProfileStock] = useState<Stock | null>(null);
   const [profileMode, setProfileMode] = useState<'read' | 'edit'>('read');
@@ -382,6 +388,33 @@ function App({ onGoHome }: AppProps = {}) {
     setCodeSuggestions([]);
     setNameSuggestions([]);
     setActiveSuggestField(null);
+  };
+
+  const openEditBasicInfo = (stock: Stock) => {
+    setEditBasicInfoStock(stock);
+    setBasicInfoDraft({
+      name: stock.name,
+      code: stock.code,
+      market: stock.market || 'CN',
+      recommender: stock.recommender || '',
+    });
+    setEditBasicInfoOpen(true);
+  };
+
+  const handleSaveBasicInfo = async () => {
+    if (!editBasicInfoStock) return;
+    setSavingBasicInfo(true);
+    try {
+      const res = await updateStock(editBasicInfoStock.id, { ...editBasicInfoStock, ...basicInfoDraft });
+      setStocks(prev => prev.map(s => s.id === res.data.id ? res.data : s));
+      if (profileStock && profileStock.id === res.data.id) setProfileStock(res.data);
+      setEditBasicInfoOpen(false);
+      setEditBasicInfoStock(null);
+    } catch (e) {
+      console.error('Failed to save basic info', e);
+    } finally {
+      setSavingBasicInfo(false);
+    }
   };
 
   const openProfileEditor = (stock: Stock) => {
@@ -947,7 +980,11 @@ function App({ onGoHome }: AppProps = {}) {
                 <tbody>
                   {displayedStocks.map(stock => (
                     <tr key={stock.id} className="stock-row" onClick={() => openProfileEditor(stock)}>
-                      <td className="stock-code">
+                      <td
+                        className="stock-code clickable-code"
+                        title="点击编辑基本信息"
+                        onClick={e => { e.stopPropagation(); openEditBasicInfo(stock); }}
+                      >
                         <span className={`market-badge market-badge-${(stock.market || 'CN').toLowerCase()}`}>{stock.market || 'CN'}</span>
                         {stock.code}
                       </td>
@@ -1393,19 +1430,10 @@ function App({ onGoHome }: AppProps = {}) {
               <div className="profile-header-left">
                 <span className="profile-header-code">{profileStock.code}</span>
                 <span className="profile-header-name">{profileStock.name}</span>
-                <button
-                  className={`market-badge market-badge-${(profileStock.market || 'CN').toLowerCase()} market-badge-toggle`}
-                  title="点击切换市场"
-                  onClick={async () => {
-                    const ALL_MARKETS = ['CN', 'US', 'JP', 'KR', 'TW', 'HK'];
-                    const cur = profileStock.market || 'CN';
-                    const idx = ALL_MARKETS.indexOf(cur);
-                    const newMarket = ALL_MARKETS[(idx + 1) % ALL_MARKETS.length];
-                    const res = await updateStock(profileStock.id, { ...profileStock, market: newMarket });
-                    setProfileStock(res.data);
-                    setStocks(prev => prev.map(s => s.id === res.data.id ? res.data : s));
-                  }}
-                >{profileStock.market || 'CN'}</button>
+                <span className={`market-badge market-badge-${(profileStock.market || 'CN').toLowerCase()}`}>{profileStock.market || 'CN'}</span>
+                {profileStock.recommender && (
+                  <span className="profile-header-recommender" title="推荐人">👤 {profileStock.recommender}</span>
+                )}
                 <span className="profile-header-tag">公司档案</span>
               </div>
               <div className="profile-header-right">
@@ -1518,6 +1546,66 @@ function App({ onGoHome }: AppProps = {}) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Basic Info Edit Modal */}
+      {editBasicInfoOpen && editBasicInfoStock && (
+        <div className="modal-overlay" onClick={() => setEditBasicInfoOpen(false)}>
+          <div className="glass-modal basic-info-modal" onClick={e => e.stopPropagation()}>
+            <h2>基本信息</h2>
+            <div className="form-group" style={{ marginTop: 16 }}>
+              <label>公司名称</label>
+              <input
+                type="text"
+                value={basicInfoDraft.name}
+                onChange={e => setBasicInfoDraft(prev => ({ ...prev, name: e.target.value }))}
+                placeholder="公司名称"
+                autoFocus
+              />
+            </div>
+            <div className="form-group">
+              <label>股票代码</label>
+              <input
+                type="text"
+                value={basicInfoDraft.code}
+                onChange={e => setBasicInfoDraft(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                placeholder="股票代码"
+              />
+            </div>
+            <div className="form-group">
+              <label>市场</label>
+              <select
+                className="basic-info-select"
+                value={basicInfoDraft.market}
+                onChange={e => setBasicInfoDraft(prev => ({ ...prev, market: e.target.value }))}
+              >
+                <option value="CN">CN — A股</option>
+                <option value="HK">HK — 港股</option>
+                <option value="US">US — 美股</option>
+                <option value="TW">TW — 台股</option>
+                <option value="JP">JP — 日股</option>
+                <option value="KR">KR — 韩股</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label>推荐人 <span className="basic-info-optional">可选</span></label>
+              <input
+                type="text"
+                value={basicInfoDraft.recommender}
+                onChange={e => setBasicInfoDraft(prev => ({ ...prev, recommender: e.target.value }))}
+                placeholder="谁推荐了这只股票？"
+              />
+            </div>
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={() => { setEditBasicInfoOpen(false); setEditBasicInfoStock(null); }}>取消</button>
+              <button
+                className="confirm-btn"
+                onClick={handleSaveBasicInfo}
+                disabled={savingBasicInfo || !basicInfoDraft.name.trim() || !basicInfoDraft.code.trim()}
+              >{savingBasicInfo ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
         </div>
       )}
 

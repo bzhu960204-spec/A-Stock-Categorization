@@ -62,6 +62,9 @@ public class Stock {
     @Column(name = "research_value")
     private Integer researchValue = 0; // 研究价值评级 0-5星
 
+    @Column(length = 100)
+    private String recommender; // 推荐人（可选）
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "stock_categories",
