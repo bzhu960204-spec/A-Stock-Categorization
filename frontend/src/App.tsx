@@ -405,7 +405,8 @@ function App({ onGoHome }: AppProps = {}) {
     if (!editBasicInfoStock) return;
     setSavingBasicInfo(true);
     try {
-      const res = await updateStock(editBasicInfoStock.id, { ...editBasicInfoStock, ...basicInfoDraft });
+      const { categories: _cats, ...stockWithoutCategories } = editBasicInfoStock;
+      const res = await updateStock(editBasicInfoStock.id, { ...stockWithoutCategories, ...basicInfoDraft });
       setStocks(prev => prev.map(s => s.id === res.data.id ? res.data : s));
       if (profileStock && profileStock.id === res.data.id) setProfileStock(res.data);
       setEditBasicInfoOpen(false);
@@ -1431,9 +1432,6 @@ function App({ onGoHome }: AppProps = {}) {
                 <span className="profile-header-code">{profileStock.code}</span>
                 <span className="profile-header-name">{profileStock.name}</span>
                 <span className={`market-badge market-badge-${(profileStock.market || 'CN').toLowerCase()}`}>{profileStock.market || 'CN'}</span>
-                {profileStock.recommender && (
-                  <span className="profile-header-recommender" title="推荐人">👤 {profileStock.recommender}</span>
-                )}
                 <span className="profile-header-tag">公司档案</span>
               </div>
               <div className="profile-header-right">

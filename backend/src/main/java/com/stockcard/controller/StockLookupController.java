@@ -19,7 +19,6 @@ import java.util.logging.Logger;
 
 @RestController
 @RequestMapping("/api/lookup")
-@CrossOrigin(origins = "http://localhost:5173")
 public class StockLookupController {
 
     private static final Logger logger = Logger.getLogger(StockLookupController.class.getName());
