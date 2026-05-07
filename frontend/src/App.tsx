@@ -178,6 +178,7 @@ function App({ onGoHome }: AppProps = {}) {
   const [newStockCode, setNewStockCode] = useState('');
   const [newStockName, setNewStockName] = useState('');
   const [newStockNotes, setNewStockNotes] = useState('');
+  const [addStockError, setAddStockError] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [codeSuggestions, setCodeSuggestions] = useState<LookupSuggestion[]>([]);
   const [nameSuggestions, setNameSuggestions] = useState<LookupSuggestion[]>([]);
@@ -537,7 +538,9 @@ function App({ onGoHome }: AppProps = {}) {
 
   // Add stock
   const handleAddStock = async () => {
-    if (!newStockCode || !newStockName) return;
+    if (!newStockCode.trim()) { setAddStockError('请输入股票代码'); return; }
+    if (!newStockName.trim()) { setAddStockError('请输入公司名称'); return; }
+    setAddStockError('');
     try {
       await createStock({ code: newStockCode, name: newStockName, notes: newStockNotes, market: newStockMarket });
       setShowAddStock(false);
@@ -545,6 +548,7 @@ function App({ onGoHome }: AppProps = {}) {
       setNewStockName('');
       setNewStockNotes('');
       setNewStockMarket('CN');
+      setAddStockError('');
       setCodeSuggestions([]);
       setNameSuggestions([]);
       setActiveSuggestField(null);
@@ -1208,10 +1212,12 @@ function App({ onGoHome }: AppProps = {}) {
                 setNewStockName('');
                 setNewStockNotes('');
                 setNewStockMarket('CN');
+                setAddStockError('');
                 setCodeSuggestions([]);
                 setNameSuggestions([]);
                 setActiveSuggestField(null);
               }}>取消</button>
+              {addStockError && <span style={{ color: 'var(--danger, #e74c3c)', fontSize: 13 }}>{addStockError}</span>}
               <button className="confirm-btn" onClick={handleAddStock}>添加</button>
             </div>
           </div>

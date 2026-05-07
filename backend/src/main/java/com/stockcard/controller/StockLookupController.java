@@ -1,5 +1,6 @@
 package com.stockcard.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -7,8 +8,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.net.URI;
 import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -23,6 +33,24 @@ public class StockLookupController {
 
     private static final Logger logger = Logger.getLogger(StockLookupController.class.getName());
     private final RestTemplate restTemplate = new RestTemplate();
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    /** Fetches a URL with SSL verification disabled (for APIs with cert issues on the JVM trust store). */
+    private Map<?, ?> fetchJsonSkipSsl(String url) throws Exception {
+        SSLContext sslContext = SSLContext.getInstance("TLS");
+        sslContext.init(null, new TrustManager[]{
+            new X509TrustManager() {
+                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                public void checkClientTrusted(X509Certificate[] c, String a) {}
+                public void checkServerTrusted(X509Certificate[] c, String a) {}
+            }
+        }, new SecureRandom());
+        HttpClient client = HttpClient.newBuilder().sslContext(sslContext).build();
+        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+        return objectMapper.readValue(response.body(), Map.class);
+    }
+
     private static final String EASTMONEY_TOKEN = "D43BF722C8E33BDC906FB84D85E326E8";
     private static final String SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
     private static final long SEC_CACHE_TTL_MS = TimeUnit.HOURS.toMillis(12);
@@ -381,11 +409,11 @@ public class StockLookupController {
     // ─────────────── 全球市场 (Twelve Data) ───────────────
 
     /**
-     * Exchange codes for each market:
-     *   JP → TSE (Tokyo), KR → KRX (Korea), TW → TWSE (Taiwan), HK → HKEX
+     * Exchange codes for each market (Twelve Data):
+     *   JP → JPX (Tokyo), KR → KRX (Korea), TW → TWSE (Taiwan), HK → HKEX
      */
     private static final Map<String, String> MARKET_TO_EXCHANGE = Map.of(
-        "JP", "TSE",
+        "JP", "JPX",
         "KR", "KRX",
         "TW", "TWSE",
         "HK", "HKEX"
@@ -400,25 +428,35 @@ public class StockLookupController {
             if (keyword == null || keyword.trim().isEmpty()) {
                 return ResponseEntity.ok(List.of());
             }
-            String twelveDataApiKey = configController.resolveApiKey();
-            if (twelveDataApiKey == null || twelveDataApiKey.isBlank()) {
-                return ResponseEntity.ok(List.of());
-            }
-            String exchange = MARKET_TO_EXCHANGE.get(market.toUpperCase(Locale.ROOT));
-            if (exchange == null) {
-                return ResponseEntity.ok(List.of());
-            }
             int safeLimit = Math.min(Math.max(limit, 1), 20);
-            String encoded = URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8);
-            String url = "https://api.twelvedata.com/symbol_search?symbol=" + encoded
-                    + "&exchange=" + exchange
-                    + "&outputsize=" + safeLimit
-                    + "&apikey=" + twelveDataApiKey;
+            String kw = keyword.trim();
+            String marketUpper = market == null ? "" : market.toUpperCase(Locale.ROOT);
 
-            Map<?, ?> response = restTemplate.getForObject(url, Map.class);
-            return ResponseEntity.ok(parseTwelveDataResult(response, safeLimit));
+            // Try Twelve Data first if API key is configured
+            String twelveDataApiKey = configController.resolveApiKey();
+            if (twelveDataApiKey != null && !twelveDataApiKey.isBlank()) {
+                String exchange = MARKET_TO_EXCHANGE.get(marketUpper);
+                if (exchange != null) {
+                    try {
+                        String encoded = URLEncoder.encode(kw, StandardCharsets.UTF_8);
+                        String url = "https://api.twelvedata.com/symbol_search?symbol=" + encoded
+                                + "&exchange=" + exchange
+                                + "&outputsize=" + safeLimit
+                                + "&apikey=" + twelveDataApiKey;
+                        Map<?, ?> response = fetchJsonSkipSsl(url);
+                        List<Map<String, String>> tdResults = parseTwelveDataResult(response, safeLimit);
+                        if (!tdResults.isEmpty()) {
+                            return ResponseEntity.ok(tdResults);
+                        }
+                    } catch (Exception e) {
+                        logger.warning("Twelve Data global suggest failed: " + e.getMessage());
+                    }
+                }
+            }
+
+            return ResponseEntity.ok(List.of());
         } catch (Exception e) {
-            logger.warning("Twelve Data global suggest failed: " + e.getMessage());
+            logger.warning("Global suggest failed: " + e.getMessage());
             return ResponseEntity.ok(List.of());
         }
     }
