@@ -174,7 +174,8 @@ function App({ onGoHome }: AppProps = {}) {
 
   // Add stock dialog
   const [showAddStock, setShowAddStock] = useState(false);
-  const [newStockMarket, setNewStockMarket] = useState<'CN' | 'US' | 'JP' | 'KR' | 'TW' | 'HK'>('CN');
+  const [newStockMarket, setNewStockMarket] = useState<'CN' | 'US' | 'JP' | 'KR' | 'TW' | 'HK' | 'OTHER'>('CN');
+  const [newStockCustomMarket, setNewStockCustomMarket] = useState('');
   const [newStockCode, setNewStockCode] = useState('');
   const [newStockName, setNewStockName] = useState('');
   const [newStockNotes, setNewStockNotes] = useState('');
@@ -317,7 +318,7 @@ function App({ onGoHome }: AppProps = {}) {
 
   // Lookup stock
   const handleLookup = async (value: string, field: 'code' | 'name') => {
-    if (!value.trim()) return;
+    if (!value.trim() || newStockMarket === 'OTHER') return;
     setLookingUp(true);
     try {
       const res = newStockMarket === 'US'
@@ -334,7 +335,7 @@ function App({ onGoHome }: AppProps = {}) {
   };
 
   useEffect(() => {
-    if (!showAddStock) return;
+    if (!showAddStock || newStockMarket === 'OTHER') { setCodeSuggestions([]); return; }
 
     const trimmedCode = newStockCode.trim();
     if (trimmedCode.length < 2) {
@@ -359,7 +360,7 @@ function App({ onGoHome }: AppProps = {}) {
   }, [newStockCode, showAddStock, newStockMarket]);
 
   useEffect(() => {
-    if (!showAddStock) return;
+    if (!showAddStock || newStockMarket === 'OTHER') { setNameSuggestions([]); return; }
 
     const trimmedName = newStockName.trim();
     if (trimmedName.length < 1) {
@@ -540,14 +541,17 @@ function App({ onGoHome }: AppProps = {}) {
   const handleAddStock = async () => {
     if (!newStockCode.trim()) { setAddStockError('请输入股票代码'); return; }
     if (!newStockName.trim()) { setAddStockError('请输入公司名称'); return; }
+    if (newStockMarket === 'OTHER' && !newStockCustomMarket.trim()) { setAddStockError('请输入市场代码'); return; }
     setAddStockError('');
     try {
-      await createStock({ code: newStockCode, name: newStockName, notes: newStockNotes, market: newStockMarket });
+      const marketValue = newStockMarket === 'OTHER' ? newStockCustomMarket.trim().toUpperCase() : newStockMarket;
+      await createStock({ code: newStockCode, name: newStockName, notes: newStockNotes, market: marketValue });
       setShowAddStock(false);
       setNewStockCode('');
       setNewStockName('');
       setNewStockNotes('');
       setNewStockMarket('CN');
+      setNewStockCustomMarket('');
       setAddStockError('');
       setCodeSuggestions([]);
       setNameSuggestions([]);
@@ -774,8 +778,8 @@ function App({ onGoHome }: AppProps = {}) {
     return map;
   }, [stocks]);
 
-  const KNOWN_MARKETS = ['CN', 'US', 'JP', 'KR', 'TW', 'HK'] as const;
-  const MARKET_LABEL: Record<string, string> = { CN: 'A股', US: '美股', JP: '日股', KR: '韩股', TW: '台股', HK: '港股' };
+  const KNOWN_MARKETS = ['CN', 'US', 'JP', 'KR', 'TW', 'HK', 'OTHER'] as const;
+  const MARKET_LABEL: Record<string, string> = { CN: 'A股', US: '美股', JP: '日股', KR: '韩股', TW: '台股', HK: '港股', OTHER: '其它市场' };
 
   const toggleMarket = (m: string) => {
     setMarketFilters(prev => {
@@ -788,7 +792,13 @@ function App({ onGoHome }: AppProps = {}) {
   const displayedStocks = useMemo(() => {
     let result = stocks;
     if (marketFilters.size > 0) {
-      result = result.filter(s => marketFilters.has(s.market || 'CN'));
+      const standardMarkets = ['CN', 'US', 'JP', 'KR', 'TW', 'HK'];
+      result = result.filter(s => {
+        const m = s.market || 'CN';
+        if (marketFilters.has(m)) return true;
+        if (marketFilters.has('OTHER') && !standardMarkets.includes(m)) return true;
+        return false;
+      });
     }
     if (starFilter !== null) {
       result = result.filter(s => (s.researchValue ?? 0) >= starFilter);
@@ -1077,6 +1087,7 @@ function App({ onGoHome }: AppProps = {}) {
           setNewStockName('');
           setNewStockNotes('');
           setNewStockMarket('CN');
+          setNewStockCustomMarket('');
           setCodeSuggestions([]);
           setNameSuggestions([]);
           setActiveSuggestField(null);
@@ -1110,15 +1121,31 @@ function App({ onGoHome }: AppProps = {}) {
                   className={`market-select-btn ${newStockMarket === 'HK' ? 'active' : ''}`}
                   onClick={() => { setNewStockMarket('HK'); setNewStockCode(''); setNewStockName(''); setCodeSuggestions([]); setNameSuggestions([]); }}
                 >🇭🇰 港股</button>
+                <button
+                  className={`market-select-btn ${newStockMarket === 'OTHER' ? 'active' : ''}`}
+                  onClick={() => { setNewStockMarket('OTHER'); setNewStockCode(''); setNewStockName(''); setNewStockCustomMarket(''); setCodeSuggestions([]); setNameSuggestions([]); }}
+                >🌐 其它市场</button>
               </div>
             </div>
+            {newStockMarket === 'OTHER' && (
+              <div className="form-group">
+                <label>市场代码（自填）</label>
+                <input
+                  type="text"
+                  placeholder="如 SGX、LSE、NASDAQ...(大写)" 
+                  value={newStockCustomMarket}
+                  onChange={e => setNewStockCustomMarket(e.target.value.toUpperCase())}
+                  maxLength={10}
+                />
+              </div>
+            )}
             <div className="form-group">
-              <label>{newStockMarket === 'US' ? 'Ticker' : newStockMarket === 'JP' ? '証券コード' : newStockMarket === 'KR' ? '종목코드' : newStockMarket === 'TW' ? '股票代碼' : newStockMarket === 'HK' ? '股票代號' : '股票代码'}</label>
+              <label>股票代码</label>
               <div className="input-stack">
                 <div className="input-with-btn">
                   <input
                     type="text"
-                    placeholder={newStockMarket === 'US' ? '如 AAPL、NVDA、TSLA' : newStockMarket === 'JP' ? '如 7203 (Toyota)' : newStockMarket === 'KR' ? '如 005930 (Samsung)' : newStockMarket === 'TW' ? '如 2330 (台積電)' : newStockMarket === 'HK' ? '如 0700 (腾讯)' : '如 600519'}
+                    placeholder={newStockMarket === 'US' ? '如 AAPL、NVDA、TSLA' : newStockMarket === 'JP' ? '如 7203 (Toyota)' : newStockMarket === 'KR' ? '如 005930 (Samsung)' : newStockMarket === 'TW' ? '如 2330 (台積電)' : newStockMarket === 'HK' ? '如 0700 (腾讯)' : newStockMarket === 'OTHER' ? '输入股票代码' : '如 600519'}
                     value={newStockCode}
                     onFocus={() => setActiveSuggestField('code')}
                     onBlur={() => setTimeout(() => setActiveSuggestField(prev => (prev === 'code' ? null : prev)), 120)}
@@ -1130,11 +1157,13 @@ function App({ onGoHome }: AppProps = {}) {
                       }
                     }}
                   />
-                  <button
-                    className="lookup-btn"
-                    onClick={() => handleLookup(newStockCode, 'code')}
-                    disabled={lookingUp}
-                  >{lookingUp ? '...' : '查询'}</button>
+                  {newStockMarket !== 'OTHER' && (
+                    <button
+                      className="lookup-btn"
+                      onClick={() => handleLookup(newStockCode, 'code')}
+                      disabled={lookingUp}
+                    >{lookingUp ? '...' : '查询'}</button>
+                  )}
                 </div>
                 {activeSuggestField === 'code' && codeSuggestions.length > 0 && (
                   <div className="suggestion-list">
@@ -1160,7 +1189,7 @@ function App({ onGoHome }: AppProps = {}) {
                 <div className="input-with-btn">
                   <input
                     type="text"
-                    placeholder={newStockMarket === 'US' ? '如 Apple Inc.' : newStockMarket === 'JP' ? '如 トヨタ自動車' : newStockMarket === 'KR' ? '如 삼성전자' : newStockMarket === 'TW' ? '如 台灣積體電路' : newStockMarket === 'HK' ? '如 腾讯控股' : '如 贵州茅台'}
+                    placeholder={newStockMarket === 'US' ? '如 Apple Inc.' : newStockMarket === 'JP' ? '如 トヨタ自動車' : newStockMarket === 'KR' ? '如 삼성전자' : newStockMarket === 'TW' ? '如 台灣積體電路' : newStockMarket === 'HK' ? '如 腾讯控股' : newStockMarket === 'OTHER' ? '输入公司名称' : '如 贵州茅台'}
                     value={newStockName}
                     onFocus={() => setActiveSuggestField('name')}
                     onBlur={() => setTimeout(() => setActiveSuggestField(prev => (prev === 'name' ? null : prev)), 120)}
@@ -1172,11 +1201,13 @@ function App({ onGoHome }: AppProps = {}) {
                       }
                     }}
                   />
-                  <button
-                    className="lookup-btn"
-                    onClick={() => handleLookup(newStockName, 'name')}
-                    disabled={lookingUp}
-                  >{lookingUp ? '...' : '查询'}</button>
+                  {newStockMarket !== 'OTHER' && (
+                    <button
+                      className="lookup-btn"
+                      onClick={() => handleLookup(newStockName, 'name')}
+                      disabled={lookingUp}
+                    >{lookingUp ? '...' : '查询'}</button>
+                  )}
                 </div>
                 {activeSuggestField === 'name' && nameSuggestions.length > 0 && (
                   <div className="suggestion-list">
@@ -1212,6 +1243,7 @@ function App({ onGoHome }: AppProps = {}) {
                 setNewStockName('');
                 setNewStockNotes('');
                 setNewStockMarket('CN');
+                setNewStockCustomMarket('');
                 setAddStockError('');
                 setCodeSuggestions([]);
                 setNameSuggestions([]);
@@ -1581,8 +1613,11 @@ function App({ onGoHome }: AppProps = {}) {
               <label>市场</label>
               <select
                 className="basic-info-select"
-                value={basicInfoDraft.market}
-                onChange={e => setBasicInfoDraft(prev => ({ ...prev, market: e.target.value }))}
+                value={['CN', 'US', 'JP', 'KR', 'TW', 'HK'].includes(basicInfoDraft.market) ? basicInfoDraft.market : 'OTHER'}
+                onChange={e => {
+                  const val = e.target.value;
+                  setBasicInfoDraft(prev => ({ ...prev, market: val === 'OTHER' ? '' : val }));
+                }}
               >
                 <option value="CN">CN — A股</option>
                 <option value="HK">HK — 港股</option>
@@ -1590,7 +1625,18 @@ function App({ onGoHome }: AppProps = {}) {
                 <option value="TW">TW — 台股</option>
                 <option value="JP">JP — 日股</option>
                 <option value="KR">KR — 韩股</option>
+                <option value="OTHER">其它市场（手动输入）</option>
               </select>
+              {!['CN', 'US', 'JP', 'KR', 'TW', 'HK'].includes(basicInfoDraft.market) && (
+                <input
+                  type="text"
+                  style={{ marginTop: 8 }}
+                  value={basicInfoDraft.market}
+                  onChange={e => setBasicInfoDraft(prev => ({ ...prev, market: e.target.value.toUpperCase() }))}
+                  placeholder="市场代码，如 SGX、LSE、NASDAQ"
+                  maxLength={10}
+                />
+              )}
             </div>
             <div className="form-group">
               <label>推荐人 <span className="basic-info-optional">可选</span></label>
@@ -1606,7 +1652,7 @@ function App({ onGoHome }: AppProps = {}) {
               <button
                 className="confirm-btn"
                 onClick={handleSaveBasicInfo}
-                disabled={savingBasicInfo || !basicInfoDraft.name.trim() || !basicInfoDraft.code.trim()}
+                disabled={savingBasicInfo || !basicInfoDraft.name.trim() || !basicInfoDraft.code.trim() || !basicInfoDraft.market.trim()}
               >{savingBasicInfo ? '保存中...' : '保存'}</button>
             </div>
           </div>

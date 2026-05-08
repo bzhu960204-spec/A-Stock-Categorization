@@ -825,12 +825,12 @@ body {
 
 /* Add Stock modal — market selector */
 .market-select-group {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 .market-select-btn {
-  flex: 1;
-  padding: 8px 0;
+  padding: 8px 4px;
   border: 1px solid var(--border-mid);
   border-radius: 4px;
   background: var(--input-bg);
@@ -840,6 +840,7 @@ body {
   cursor: pointer;
   transition: all 0.12s;
   font-family: inherit;
+  white-space: nowrap;
 }
 .market-select-btn.active {
   background: var(--accent-dim);
