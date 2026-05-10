@@ -268,13 +268,16 @@ function App({ onGoHome }: AppProps = {}) {
   const [showIndustryChainModal, setShowIndustryChainModal] = useState(false);
   const [industryChains, setIndustryChains] = useState<IndustryChain[]>([]);
   const [loadingChains, setLoadingChains] = useState(false);
-  const [chainFormMode, setChainFormMode] = useState<'none' | 'add' | 'edit'>('none');
+  const [chainFormMode, setChainFormMode] = useState<'none' | 'add' | 'edit' | 'json-import'>('none');
   const [editingChain, setEditingChain] = useState<IndustryChain | null>(null);
   const [chainFormTitle, setChainFormTitle] = useState('');
   const [chainFormContent, setChainFormContent] = useState('');
   const [savingChain, setSavingChain] = useState(false);
   const [viewingChain, setViewingChain] = useState<IndustryChain | null>(null);
   const [pendingDeleteChain, setPendingDeleteChain] = useState<IndustryChain | null>(null);
+  const [chainJsonText, setChainJsonText] = useState('');
+  const [chainJsonError, setChainJsonError] = useState('');
+  const [importingChains, setImportingChains] = useState(false);
 
   // Before saving: upload any data: URIs to the backend and replace with real URLs
   const processImagesBeforeSave = async (html: string): Promise<string> => {
@@ -577,6 +580,8 @@ function App({ onGoHome }: AppProps = {}) {
     setEditingChain(null);
     setViewingChain(null);
     setPendingDeleteChain(null);
+    setChainJsonText('');
+    setChainJsonError('');
     setLoadingChains(true);
     try {
       const res = await getIndustryChains(profileStock.id);
@@ -598,6 +603,128 @@ function App({ onGoHome }: AppProps = {}) {
     setEditingChain(chain);
     setChainFormTitle(chain.title);
     setChainFormContent(chain.content);
+  };
+
+  const handleExportChainsPdf = () => {
+    if (!profileStock || industryChains.length === 0) return;
+    const stockLabel = `${profileStock.name}（${profileStock.code}）`;
+    const chainHtmlBlocks = industryChains.map(chain => {
+      const md = autoFenceBoxArt(chain.content);
+      const html = marked.parse(md) as string;
+      return `<section class="chain-section">
+  <h2 class="chain-title">${chain.title}</h2>
+  <div class="chain-body">${html}</div>
+</section>`;
+    }).join('\n');
+
+    const printHtml = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>${stockLabel} — 产业链</title>
+<style>
+  @page { size: A4; margin: 22mm 18mm; }
+  * { box-sizing: border-box; overflow: visible; }
+  body {
+    font-family: 'PingFang SC', 'Microsoft YaHei', 'SimSun', sans-serif;
+    font-size: 11pt;
+    color: #1a1a1a;
+    background: #fff;
+    line-height: 1.7;
+    overflow: visible;
+  }
+  .cover {
+    margin-bottom: 32pt;
+    border-bottom: 2px solid #333;
+    padding-bottom: 12pt;
+  }
+  .cover h1 { font-size: 18pt; margin: 0 0 4pt; }
+  .cover p  { font-size: 9pt; color: #555; margin: 0; }
+  .chain-section { margin-bottom: 28pt; break-inside: avoid; }
+  .chain-title {
+    font-size: 13pt;
+    font-weight: 700;
+    border-left: 4px solid #333;
+    padding-left: 8pt;
+    margin: 0 0 10pt;
+  }
+  .chain-body { font-size: 10.5pt; }
+  .chain-body pre {
+    font-family: 'JetBrains Mono', 'Courier New', 'Courier', monospace;
+    font-size: 8.5pt;
+    background: #f6f6f6;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    padding: 10pt 12pt;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow: visible;
+    line-height: 1.35;
+  }
+  .chain-body code {
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 8pt;
+    background: #f0f0f0;
+    padding: 1px 3px;
+    border-radius: 2px;
+  }
+  .chain-body pre code { background: none; padding: 0; font-size: inherit; }
+  .chain-body h1, .chain-body h2, .chain-body h3 { margin: 10pt 0 5pt; }
+  .chain-body p  { margin: 0 0 7pt; }
+  .chain-body ul, .chain-body ol { margin: 0 0 7pt; padding-left: 18pt; }
+  .chain-body li { margin-bottom: 2pt; }
+  hr { border: none; border-top: 1px solid #ccc; margin: 18pt 0; }
+</style>
+</head>
+<body>
+<div class="cover">
+  <h1>${stockLabel} · 产业链整理</h1>
+  <p>导出时间：${new Date().toLocaleString('zh-CN')} · 共 ${industryChains.length} 条业务线</p>
+</div>
+${chainHtmlBlocks}
+</body>
+</html>`;
+
+    const w = window.open('', '_blank', 'width=900,height=700');
+    if (!w) { alert('请允许弹出窗口以导出 PDF'); return; }
+    w.document.write(printHtml);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 600);
+  };
+
+  const handleImportChainsJson = async () => {
+    if (!profileStock) return;
+    setChainJsonError('');
+    let parsed: { title: string; content: string }[];
+    try {
+      const raw = JSON.parse(chainJsonText);
+      if (!Array.isArray(raw)) throw new Error('顶层必须是 JSON 数组 [ ... ]');
+      parsed = raw.map((item, i) => {
+        if (typeof item?.title !== 'string' || !item.title.trim()) throw new Error(`第 ${i + 1} 项缺少 title 字段`);
+        if (typeof item?.content !== 'string' || !item.content.trim()) throw new Error(`第 ${i + 1} 项缺少 content 字段`);
+        return { title: item.title.trim(), content: item.content.trim() };
+      });
+    } catch (e: unknown) {
+      setChainJsonError((e as Error).message || 'JSON 格式错误');
+      return;
+    }
+    setImportingChains(true);
+    try {
+      const results: IndustryChain[] = [];
+      for (const item of parsed) {
+        const res = await createIndustryChain(profileStock.id, item);
+        results.push(res.data);
+      }
+      setIndustryChains(prev => [...prev, ...results]);
+      setChainFormMode('none');
+      setChainJsonText('');
+      setChainJsonError('');
+    } catch {
+      setChainJsonError('导入失败，请重试。');
+    } finally {
+      setImportingChains(false);
+    }
   };
 
   const handleSaveChain = async () => {
@@ -1694,12 +1821,19 @@ function App({ onGoHome }: AppProps = {}) {
                   <span className="chain-modal-title">
                     {chainFormMode === 'add' ? '新建业务线'
                       : chainFormMode === 'edit' ? '编辑业务线'
+                      : chainFormMode === 'json-import' ? 'JSON 批量导入'
                       : viewingChain ? viewingChain.title
                       : '产业链管理'}
                   </span>
                   <div className="chain-modal-header-actions">
                     {chainFormMode === 'none' && !viewingChain && (
-                      <button className="chain-add-btn" onClick={openAddChainForm}>+ 添加业务线</button>
+                      <>
+                        {industryChains.length > 0 && (
+                          <button className="chain-add-btn chain-export-btn" onClick={handleExportChainsPdf} title="导出 PDF">↓ 导出 PDF</button>
+                        )}
+                        <button className="chain-add-btn" onClick={() => { setChainFormMode('json-import'); setChainJsonText(''); setChainJsonError(''); }}>JSON 导入</button>
+                        <button className="chain-add-btn" onClick={openAddChainForm}>+ 添加业务线</button>
+                      </>
                     )}
                     {viewingChain && chainFormMode === 'none' && (
                       <button className="chain-item-btn" onClick={() => openEditChainForm(viewingChain)}>编辑</button>
@@ -1710,6 +1844,13 @@ function App({ onGoHome }: AppProps = {}) {
                         onClick={handleSaveChain}
                         disabled={savingChain || !chainFormTitle.trim() || !chainFormContent.trim()}
                       >{savingChain ? '保存中…' : '保存'}</button>
+                    )}
+                    {chainFormMode === 'json-import' && (
+                      <button
+                        className="confirm-btn"
+                        onClick={handleImportChainsJson}
+                        disabled={importingChains || !chainJsonText.trim()}
+                      >{importingChains ? '导入中…' : '确认导入'}</button>
                     )}
                     <button
                       className="chain-modal-close"
@@ -1724,6 +1865,37 @@ function App({ onGoHome }: AppProps = {}) {
                 </div>
 
                 <div className="chain-modal-body">
+                  {/* JSON Import form */}
+                  {chainFormMode === 'json-import' && (
+                    <div className="chain-form">
+                      <div className="chain-json-hint">
+                        <span>粘贴 JSON 数组，每项包含 <code>title</code> 和 <code>content</code> 字段：</span>
+                        <pre className="chain-json-example">{`[
+  {
+    "title": "锂电池业务",
+    "content": "上游：..."
+  },
+  {
+    "title": "光伏业务",
+    "content": "上游：..."
+  }
+]`}</pre>
+                      </div>
+                      <textarea
+                        className="chain-form-content-textarea chain-json-textarea"
+                        placeholder="在此粘贴 JSON…"
+                        value={chainJsonText}
+                        onChange={e => { setChainJsonText(e.target.value); setChainJsonError(''); }}
+                        rows={14}
+                        spellCheck={false}
+                        autoFocus
+                      />
+                      {chainJsonError && (
+                        <div className="chain-json-error">{chainJsonError}</div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Read view */}
                   {viewingChain && chainFormMode === 'none' && (
                     <div className="chain-item-content chain-read-view">

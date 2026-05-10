@@ -2984,6 +2984,54 @@ body {
 }
 .chain-form-content-textarea:focus { border-color: var(--accent); }
 
+/* JSON import form */
+.chain-json-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.chain-json-hint code {
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 1px 4px;
+  border-radius: 2px;
+}
+.chain-json-example {
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 8px 12px;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  white-space: pre;
+  overflow-x: auto;
+}
+.chain-json-textarea {
+  font-size: 0.76rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+.chain-json-error {
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  color: var(--danger);
+  font-size: 0.78rem;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.chain-export-btn {
+  border-color: var(--border-mid);
+  color: var(--text-muted);
+}
+.chain-export-btn:hover { border-color: var(--accent); color: var(--accent); }
+
 /* Header-bar save/cancel buttons — compact to fit next to × */
 .chain-modal-header .cancel-btn,
 .chain-modal-header .confirm-btn {
