@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -87,6 +87,7 @@ interface Props {
 export const DocEditor = forwardRef<DocEditorHandle, Props>(
   ({ value, onChange, readonly = false }, ref) => {
     const suppressSyncRef = useRef(false);
+    const [, forceUpdate] = useState(0);
 
     const editor = useEditor({
       extensions: [
@@ -104,6 +105,9 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
         suppressSyncRef.current = true;
         onChange(editor.getHTML());
         requestAnimationFrame(() => { suppressSyncRef.current = false; });
+      },
+      onSelectionUpdate: () => {
+        forceUpdate(n => n + 1);
       },
       editorProps: {
         handlePaste: (_, event) => {
@@ -196,6 +200,14 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
             {btn('—', () => editor.chain().focus().setHorizontalRule().run(), false, '分割线')}
             <span className="doc-tb-sep" />
             {btn('⊞', () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), false, '插入表格')}
+            {editor.isActive('table') && (<>
+              <span className="doc-tb-sep" />
+              {btn('行+', () => editor.chain().focus().addRowAfter().run(), false, '在下方插入行')}
+              {btn('行−', () => editor.chain().focus().deleteRow().run(), false, '删除当前行')}
+              {btn('列+', () => editor.chain().focus().addColumnAfter().run(), false, '在右侧插入列')}
+              {btn('列−', () => editor.chain().focus().deleteColumn().run(), false, '删除当前列')}
+              {btn('🗑表格', () => editor.chain().focus().deleteTable().run(), false, '删除整个表格')}
+            </>)}
           </div>
         )}
         <div className="doc-editor-scroll">

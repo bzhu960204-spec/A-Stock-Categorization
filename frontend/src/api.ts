@@ -137,6 +137,8 @@ export const deleteSector = (id: number) => API.delete(`/research/sectors/${id}`
 
 export const getSectorReports = (sectorId: number) =>
   API.get<SectorReport[]>(`/research/sectors/${sectorId}/reports`);
+export const searchSectorReports = (keyword: string) =>
+  API.get<SectorReport[]>('/research/reports/search', { params: { keyword } });
 export const createSectorReport = (sectorId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string }) =>
   API.post<SectorReport>(`/research/sectors/${sectorId}/reports`, payload);
 export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; rating?: number }) =>
@@ -145,6 +147,25 @@ export const updateSectorReportRating = (sectorId: number, reportId: number, rat
   API.patch<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}/rating`, { rating });
 export const deleteSectorReport = (sectorId: number, reportId: number) =>
   API.delete(`/research/sectors/${sectorId}/reports/${reportId}`);
+
+// ===== Industry Chain (产业链) APIs =====
+export interface IndustryChain {
+  id: number;
+  stockId: number;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getIndustryChains = (stockId: number) =>
+  API.get<IndustryChain[]>(`/stocks/${stockId}/industry-chains`);
+export const createIndustryChain = (stockId: number, payload: Pick<IndustryChain, 'title' | 'content'>) =>
+  API.post<IndustryChain>(`/stocks/${stockId}/industry-chains`, payload);
+export const updateIndustryChain = (stockId: number, chainId: number, payload: Pick<IndustryChain, 'title' | 'content'>) =>
+  API.put<IndustryChain>(`/stocks/${stockId}/industry-chains/${chainId}`, payload);
+export const deleteIndustryChain = (stockId: number, chainId: number) =>
+  API.delete(`/stocks/${stockId}/industry-chains/${chainId}`);
 
 // ===== Config APIs =====
 export interface AppConfig {

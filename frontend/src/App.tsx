@@ -9,7 +9,8 @@ import {
   filterStocks, searchStocks, lookupStock, lookupStockSuggest, lookupUsStock, lookupUsStockSuggest,
   lookupGlobalStock, lookupGlobalStockSuggest,
   getStockTimeline, getStockDocuments, createStockDocument, updateStockDocument, deleteStockDocument, uploadDocImage,
-  type Stock, type Category, type LookupSuggestion, type StockTimelineEntry, type StockDocument
+  getIndustryChains, createIndustryChain, updateIndustryChain, deleteIndustryChain,
+  type Stock, type Category, type LookupSuggestion, type StockTimelineEntry, type StockDocument, type IndustryChain
 } from './api';
 import './App.css';
 
@@ -120,6 +121,25 @@ function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorProps) {
   );
 }
 // ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Split content by double-newline paragraphs; if a paragraph contains
+ * box-drawing / arrow characters, wrap it in a fenced code block so that
+ * ReactMarkdown renders it in monospace with preserved whitespace.
+ */
+function autoFenceBoxArt(content: string): string {
+  // Matches box-drawing (U+2500-U+257F) and common arrows
+  const BOX = /[\u2500-\u257F\u2190-\u21FF]/;
+  const paragraphs = content.split(/\n{2,}/);
+  return paragraphs
+    .map(para => {
+      if (BOX.test(para) && !para.trim().startsWith('```')) {
+        return '```\n' + para + '\n```';
+      }
+      return para;
+    })
+    .join('\n\n');
+}
 
 function groupEntriesByDay(entries: StockTimelineEntry[]) {
   const map = new Map<string, StockTimelineEntry[]>();
@@ -243,6 +263,18 @@ function App({ onGoHome }: AppProps = {}) {
   const [docSaveError, setDocSaveError] = useState('');
   const [savingDocument, setSavingDocument] = useState(false);
   const docEditorRef = useRef<DocEditorHandle>(null);
+
+  // Industry chain state
+  const [showIndustryChainModal, setShowIndustryChainModal] = useState(false);
+  const [industryChains, setIndustryChains] = useState<IndustryChain[]>([]);
+  const [loadingChains, setLoadingChains] = useState(false);
+  const [chainFormMode, setChainFormMode] = useState<'none' | 'add' | 'edit'>('none');
+  const [editingChain, setEditingChain] = useState<IndustryChain | null>(null);
+  const [chainFormTitle, setChainFormTitle] = useState('');
+  const [chainFormContent, setChainFormContent] = useState('');
+  const [savingChain, setSavingChain] = useState(false);
+  const [viewingChain, setViewingChain] = useState<IndustryChain | null>(null);
+  const [pendingDeleteChain, setPendingDeleteChain] = useState<IndustryChain | null>(null);
 
   // Before saving: upload any data: URIs to the backend and replace with real URLs
   const processImagesBeforeSave = async (html: string): Promise<string> => {
@@ -535,6 +567,65 @@ function App({ onGoHome }: AppProps = {}) {
       future: profileStock.future || '',
       founderCeoHolding: profileStock.founderCeoHolding || '',
     });
+  };
+
+  // Industry chain handlers
+  const openIndustryChainModal = async () => {
+    if (!profileStock) return;
+    setShowIndustryChainModal(true);
+    setChainFormMode('none');
+    setEditingChain(null);
+    setViewingChain(null);
+    setPendingDeleteChain(null);
+    setLoadingChains(true);
+    try {
+      const res = await getIndustryChains(profileStock.id);
+      setIndustryChains(res.data);
+    } finally {
+      setLoadingChains(false);
+    }
+  };
+
+  const openAddChainForm = () => {
+    setChainFormMode('add');
+    setEditingChain(null);
+    setChainFormTitle('');
+    setChainFormContent('');
+  };
+
+  const openEditChainForm = (chain: IndustryChain) => {
+    setChainFormMode('edit');
+    setEditingChain(chain);
+    setChainFormTitle(chain.title);
+    setChainFormContent(chain.content);
+  };
+
+  const handleSaveChain = async () => {
+    if (!profileStock || !chainFormTitle.trim() || !chainFormContent.trim()) return;
+    setSavingChain(true);
+    try {
+      if (chainFormMode === 'add') {
+        const res = await createIndustryChain(profileStock.id, { title: chainFormTitle.trim(), content: chainFormContent.trim() });
+        setIndustryChains(prev => [...prev, res.data]);
+        setViewingChain(res.data);
+      } else if (chainFormMode === 'edit' && editingChain) {
+        const res = await updateIndustryChain(profileStock.id, editingChain.id, { title: chainFormTitle.trim(), content: chainFormContent.trim() });
+        setIndustryChains(prev => prev.map(c => c.id === res.data.id ? res.data : c));
+        setViewingChain(res.data);  // return to read view with updated content
+      }
+      setChainFormMode('none');
+      setEditingChain(null);
+    } finally {
+      setSavingChain(false);
+    }
+  };
+
+  const handleDeleteChain = async (chain: IndustryChain) => {
+    if (!profileStock) return;
+    await deleteIndustryChain(profileStock.id, chain.id);
+    setIndustryChains(prev => prev.filter(c => c.id !== chain.id));
+    setPendingDeleteChain(null);
+    if (viewingChain?.id === chain.id) setViewingChain(null);
   };
 
   // Add stock
@@ -1524,12 +1615,20 @@ function App({ onGoHome }: AppProps = {}) {
                     <div key={section.key} className="profile-section-view">
                       <div className="profile-section-heading">
                         <h3>{section.title}</h3>
-                        {profileMode === 'read' && (
-                          <button
-                            className="profile-section-edit-btn"
-                            onClick={() => setProfileMode('edit')}
-                          >编辑</button>
-                        )}
+                        <div className="profile-section-heading-actions">
+                          {section.key === 'business' && profileMode === 'read' && (
+                            <button
+                              className="profile-section-chain-btn"
+                              onClick={openIndustryChainModal}
+                            >产业链</button>
+                          )}
+                          {profileMode === 'read' && (
+                            <button
+                              className="profile-section-edit-btn"
+                              onClick={() => setProfileMode('edit')}
+                            >编辑</button>
+                          )}
+                        </div>
                       </div>
 
                       {profileMode === 'read' ? (
@@ -1578,6 +1677,119 @@ function App({ onGoHome }: AppProps = {}) {
                     <button className="cancel-btn" onClick={() => setShowJsonImport(false)}>取消</button>
                     <button className="confirm-btn" onClick={applyJsonToProfileDraft}>导入并覆盖对应字段</button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Industry Chain Modal */}
+          {showIndustryChainModal && (
+            <div className="modal-overlay chain-modal-overlay" onClick={() => {
+              if (chainFormMode !== 'none') { setChainFormMode('none'); setEditingChain(null); }
+              else if (viewingChain) { setViewingChain(null); }
+              else { setShowIndustryChainModal(false); setPendingDeleteChain(null); }
+            }}>
+              <div className="chain-modal" onClick={e => e.stopPropagation()}>
+                <div className="chain-modal-header">
+                  <span className="chain-modal-title">
+                    {chainFormMode === 'add' ? '新建业务线'
+                      : chainFormMode === 'edit' ? '编辑业务线'
+                      : viewingChain ? viewingChain.title
+                      : '产业链管理'}
+                  </span>
+                  <div className="chain-modal-header-actions">
+                    {chainFormMode === 'none' && !viewingChain && (
+                      <button className="chain-add-btn" onClick={openAddChainForm}>+ 添加业务线</button>
+                    )}
+                    {viewingChain && chainFormMode === 'none' && (
+                      <button className="chain-item-btn" onClick={() => openEditChainForm(viewingChain)}>编辑</button>
+                    )}
+                    {(chainFormMode === 'add' || chainFormMode === 'edit') && (
+                      <button
+                        className="confirm-btn"
+                        onClick={handleSaveChain}
+                        disabled={savingChain || !chainFormTitle.trim() || !chainFormContent.trim()}
+                      >{savingChain ? '保存中…' : '保存'}</button>
+                    )}
+                    <button
+                      className="chain-modal-close"
+                      onClick={chainFormMode !== 'none'
+                        ? () => { setChainFormMode('none'); setEditingChain(null); }
+                        : viewingChain
+                        ? () => setViewingChain(null)
+                        : () => { setShowIndustryChainModal(false); setPendingDeleteChain(null); }
+                      }
+                    >{(chainFormMode !== 'none' || viewingChain) ? '←' : '×'}</button>
+                  </div>
+                </div>
+
+                <div className="chain-modal-body">
+                  {/* Read view */}
+                  {viewingChain && chainFormMode === 'none' && (
+                    <div className="chain-item-content chain-read-view">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{autoFenceBoxArt(viewingChain.content)}</ReactMarkdown>
+                    </div>
+                  )}
+
+                  {/* Add / Edit form */}
+                  {(chainFormMode === 'add' || chainFormMode === 'edit') && (
+                    <div className="chain-form">
+                      <input
+                        className="chain-form-title-input"
+                        placeholder="业务线名称（如：锂电池业务、光伏业务）"
+                        value={chainFormTitle}
+                        onChange={e => setChainFormTitle(e.target.value)}
+                        autoFocus
+                      />
+                      <textarea
+                        className="chain-form-content-textarea"
+                        placeholder="产业链示意图（支持 Markdown + 文字图表）"
+                        value={chainFormContent}
+                        onChange={e => setChainFormContent(e.target.value)}
+                        rows={18}
+                        spellCheck={false}
+                      />
+                    </div>
+                  )}
+
+                  {/* List */}
+                  {chainFormMode === 'none' && !viewingChain && (
+                    <div className="chain-list">
+                      {loadingChains ? (
+                        <div className="chain-list-empty">加载中…</div>
+                      ) : industryChains.length === 0 ? (
+                        <div className="chain-list-empty">
+                          <span className="chain-empty-icon">◇</span>
+                          <span>暂无产业链，点击「+ 添加业务线」开始整理</span>
+                        </div>
+                      ) : (
+                        industryChains.map(chain => (
+                          <div key={chain.id} className="chain-item">
+                            <div className="chain-item-header">
+                              <button
+                                className="chain-item-toggle"
+                                onClick={() => setViewingChain(chain)}
+                              >
+                                <span className="chain-item-title">{chain.title}</span>
+                                <span className="chain-item-arrow">▶</span>
+                              </button>
+                              <div className="chain-item-actions">
+                                {pendingDeleteChain?.id === chain.id ? (
+                                  <>
+                                    <span className="chain-delete-confirm-text">确认删除？</span>
+                                    <button className="chain-item-btn chain-item-btn-danger" onClick={() => handleDeleteChain(chain)}>删除</button>
+                                    <button className="chain-item-btn" onClick={() => setPendingDeleteChain(null)}>取消</button>
+                                  </>
+                                ) : (
+                                  <button className="chain-item-btn chain-item-btn-danger" onClick={() => setPendingDeleteChain(chain)}>删除</button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

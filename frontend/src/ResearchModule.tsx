@@ -3,7 +3,7 @@ import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
   getSectors, createSector, updateSector, deleteSector,
   getSectorReports, createSectorReport, updateSectorReport, deleteSectorReport,
-  updateSectorReportRating,
+  updateSectorReportRating, searchSectorReports,
   type Sector, type SectorReport,
 } from './api';
 import './App.css';
@@ -33,6 +33,11 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   // Search & filter
   const [search, setSearch] = useState('');
   const [starFilter, setStarFilter] = useState(0); // 0 = all, 1-5 = at least N stars
+
+  // Search scope: 'local' = within selected sector, 'global' = all sectors
+  const [searchScope, setSearchScope] = useState<'local' | 'global'>('global');
+  const [globalResults, setGlobalResults] = useState<SectorReport[]>([]);
+  const [globalSearching, setGlobalSearching] = useState(false);
 
   // Edit form state (inside modal)
   const [editTitle, setEditTitle] = useState('');
@@ -74,11 +79,34 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   }, []);
 
   useEffect(() => {
-    if (selectedSector) loadReports(selectedSector.id);
-    else setReports([]);
+    if (selectedSector) {
+      loadReports(selectedSector.id);
+      setSearchScope('local');
+    } else {
+      setReports([]);
+      setSearchScope('global');
+    }
     setSearch('');
     setStarFilter(0);
+    setGlobalResults([]);
   }, [selectedSector, loadReports]);
+
+  // Debounced global search (runs when scope is 'global')
+  useEffect(() => {
+    if (searchScope !== 'global') { setGlobalResults([]); return; }
+    const kw = search.trim();
+    if (!kw) { setGlobalResults([]); return; }
+    const timer = setTimeout(async () => {
+      setGlobalSearching(true);
+      try {
+        const res = await searchSectorReports(kw);
+        setGlobalResults(res.data);
+      } finally {
+        setGlobalSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search, searchScope]);
 
   const filteredReports = useMemo(() => {
     let list = reports;
@@ -296,27 +324,54 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
           </div>
         </aside>
 
-        {/* Main content: full-width report list */}
+        {/* Main content */}
         <div className="main-content">
-          {!selectedSector ? (
-            <div className="research-empty-state">
-              <span>← 从左侧选择一个行业</span>
-            </div>
-          ) : (
-            <div className="rp-list-wrap">
-              <div className="rp-toolbar">
-                <span className="rp-toolbar-title">{selectedSector.name}</span>
-                <span className="rp-toolbar-count">{filteredReports.length}/{reports.length} 篇</span>
-                <div style={{ flex: 1 }} />
+          <div className="rp-list-wrap">
+
+            {/* Toolbar */}
+            <div className="rp-toolbar">
+              <span className="rp-toolbar-title">
+                {searchScope === 'global' ? '全局搜索' : (selectedSector?.name ?? '全局搜索')}
+              </span>
+              {(searchScope === 'local' || search.trim()) && (
+                <span className="rp-toolbar-count">
+                  {searchScope === 'global'
+                    ? (globalSearching ? '…' : `${globalResults.length} 篇`)
+                    : `${filteredReports.length}/${reports.length} 篇`}
+                </span>
+              )}
+              <div style={{ flex: 1 }} />
+              {searchScope === 'local' && selectedSector && (
                 <button className="rp-new-btn" onClick={openNewModal}>+ 新增研报</button>
-              </div>
-              <div className="rp-filter-bar">
+              )}
+            </div>
+
+            {/* Unified filter bar */}
+            <div className="rp-filter-bar">
+              <div className="rp-search-wrap">
                 <input
                   className="rp-search-input"
-                  placeholder="搜索标题 / 来源 / 日期…"
+                  placeholder={searchScope === 'global'
+                    ? '全局搜索研报标题 / 内容 / 来源…'
+                    : '搜索标题 / 来源 / 日期…'}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
+                {selectedSector && (
+                  <button
+                    className={`rp-scope-toggle${searchScope === 'global' ? ' active' : ''}`}
+                    onClick={() => {
+                      setSearchScope(prev => prev === 'local' ? 'global' : 'local');
+                      setSearch('');
+                      setGlobalResults([]);
+                    }}
+                    title={searchScope === 'local' ? '切换为全局搜索' : '切换为本行业搜索'}
+                  >
+                    {searchScope === 'local' ? '本行业' : '全局'}
+                  </button>
+                )}
+              </div>
+              {searchScope === 'local' && selectedSector && (
                 <div className="rp-star-filters">
                   {[0, 1, 2, 3, 4, 5].map(n => (
                     <button
@@ -329,9 +384,64 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                     </button>
                   ))}
                 </div>
-              </div>
+              )}
+            </div>
 
-              {loadingReports ? (
+            {/* Results */}
+            {searchScope === 'global' ? (
+              !search.trim() ? (
+                !selectedSector ? (
+                  <div className="research-empty-state">
+                    <span>← 从左侧选择一个行业，或在搜索框中全局搜索</span>
+                  </div>
+                ) : (
+                  <div className="research-empty-state">
+                    <span>输入关键词以全局搜索研报</span>
+                  </div>
+                )
+              ) : globalSearching ? (
+                <div className="research-empty-state">搜索中…</div>
+              ) : globalResults.length === 0 ? (
+                <div className="research-empty-state">无匹配研报</div>
+              ) : (
+                <div className="rp-list">
+                  {globalResults.map(report => (
+                    <div key={report.id} className="rp-row" onClick={() => {
+                      const sec = sectors.find(s => s.id === report.sectorId);
+                      if (sec) setSelectedSector(sec);
+                      openReadModal(report);
+                    }}>
+                      <div className="rp-row-main">
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span className="rp-global-sector-tag">{report.sectorName}</span>
+                          <span className="rp-row-title">{report.title}</span>
+                        </div>
+                        <span className="rp-row-preview">
+                          {report.content ? stripHtml(report.content) : '（无内容）'}
+                        </span>
+                      </div>
+                      <div className="rp-row-right">
+                        <div className="rp-row-stars">
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <span key={n} className={`star-btn${(report.rating ?? 0) >= n ? ' filled' : ''}`}>
+                              {(report.rating ?? 0) >= n ? '★' : '☆'}
+                            </span>
+                          ))}
+                        </div>
+                        <span className="rp-row-date">
+                          {new Date(report.createdAt).toLocaleDateString('zh-CN')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : (
+              !selectedSector ? (
+                <div className="research-empty-state">
+                  <span>← 从左侧选择一个行业</span>
+                </div>
+              ) : loadingReports ? (
                 <div className="research-empty-state">加载中…</div>
               ) : reports.length === 0 ? (
                 <div className="research-empty-state" style={{ flexDirection: 'column', gap: 14 }}>
@@ -376,9 +486,10 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          )}
+              )
+            )}
+
+          </div>
         </div>
       </main>
 

@@ -5,6 +5,7 @@ import com.stockcard.entity.StockDocument;
 import com.stockcard.entity.Stock;
 import com.stockcard.entity.StockTimeline;
 import com.stockcard.repository.CategoryRepository;
+import com.stockcard.repository.IndustryChainRepository;
 import com.stockcard.repository.StockDocumentRepository;
 import com.stockcard.repository.StockRepository;
 import com.stockcard.repository.StockTimelineRepository;
@@ -28,6 +29,7 @@ public class StockController {
     private final CategoryRepository categoryRepository;
     private final StockTimelineRepository stockTimelineRepository;
     private final StockDocumentRepository stockDocumentRepository;
+    private final IndustryChainRepository industryChainRepository;
 
     @GetMapping
     public List<Stock> getAllStocks() {
@@ -82,6 +84,7 @@ public class StockController {
                 .map(stock -> {
                     recordTimeline(stock, "DELETE", "删除股票记录");
                     stockDocumentRepository.deleteByStockId(stock.getId());
+                    industryChainRepository.deleteByStockId(stock.getId());
                     stockRepository.delete(stock);
                     return ResponseEntity.ok().<Void>build();
                 })
@@ -218,11 +221,14 @@ public class StockController {
         return stockRepository.findByAnyCategoryIds(categoryIds);
     }
 
-    // 搜索股票（代码、名称及所有档案字段，内存过滤）
+    // 搜索股票（代码、名称及所有档案字段 + 文档内容 + 日志描述，内存过滤）
     @GetMapping("/search")
     public List<Stock> searchStocks(@RequestParam String keyword) {
         String kw = keyword.trim().toLowerCase();
         if (kw.isEmpty()) return stockRepository.findAll();
+        String pattern = "%" + kw + "%";
+        java.util.Set<Long> docMatches = stockDocumentRepository.findStockIdsByTitleOrContentContaining(pattern);
+        java.util.Set<Long> timelineMatches = stockTimelineRepository.findStockIdsByDescriptionContaining(pattern);
         return stockRepository.findAll().stream()
             .filter(s -> contains(s.getCode(), kw)
                       || contains(s.getName(), kw)
@@ -234,7 +240,9 @@ public class StockController {
                       || contains(s.getStrengths(), kw)
                       || contains(s.getStructuralWeaknesses(), kw)
                       || contains(s.getFuture(), kw)
-                      || contains(s.getFounderCeoHolding(), kw))
+                      || contains(s.getFounderCeoHolding(), kw)
+                      || docMatches.contains(s.getId())
+                      || timelineMatches.contains(s.getId()))
             .collect(java.util.stream.Collectors.toList());
     }
 

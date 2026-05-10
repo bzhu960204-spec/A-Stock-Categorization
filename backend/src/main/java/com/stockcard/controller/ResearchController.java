@@ -190,4 +190,22 @@ public class ResearchController {
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
+
+    // ===== Global search across all sectors =====
+    @GetMapping("/reports/search")
+    public List<ReportDto> searchReports(@RequestParam String keyword) {
+        String kw = keyword.trim().toLowerCase();
+        if (kw.isEmpty()) return List.of();
+        return sectorReportRepository.findAll().stream()
+                .filter(r -> containsIgnoreCase(r.getTitle(), kw)
+                          || containsIgnoreCase(r.getContent(), kw)
+                          || containsIgnoreCase(r.getSource(), kw))
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .map(ReportDto::from)
+                .collect(Collectors.toList());
+    }
+
+    private static boolean containsIgnoreCase(String field, String kw) {
+        return field != null && field.toLowerCase().contains(kw);
+    }
 }
