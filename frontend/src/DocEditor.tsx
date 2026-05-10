@@ -1,4 +1,5 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { marked } from 'marked';
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -124,6 +125,18 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
               reader.readAsDataURL(file);
               return true;
             }
+          }
+          // Parse as markdown if pasted text contains markdown patterns
+          const text = event.clipboardData?.getData('text/plain') ?? '';
+          const looksLikeMarkdown = /(?:^#{1,6} |^[-*+] |\d+\. |^>|^\|.*\||\*\*|__|```)/m.test(text);
+          if (text && looksLikeMarkdown) {
+            event.preventDefault();
+            const html = marked.parse(text) as string;
+            editor?.commands.insertContent(html);
+            suppressSyncRef.current = true;
+            onChange(editor?.getHTML() ?? '');
+            requestAnimationFrame(() => { suppressSyncRef.current = false; });
+            return true;
           }
           return false;
         },
