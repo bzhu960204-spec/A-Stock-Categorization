@@ -8,6 +8,68 @@
 - **前端**: React 18 + TypeScript + Vite
 - **富文本编辑器**: Tiptap (Notion 级别的所见即所得编辑器)
 
+---
+
+## 市场日历 — JSON 批量导入格式
+
+点击日历页头部的 **「⬆ 导入 JSON」** 按钮，选择符合以下格式的 `.json` 文件，即可批量导入事件。
+
+### 格式一：根节点为数组（推荐）
+
+```json
+[
+  {
+    "title": "美联储议息会议",
+    "date": "2026-06-18",
+    "category": "央行",
+    "importance": "HIGH",
+    "description": "关注是否降息及点阵图变化"
+  },
+  {
+    "title": "中国5月CPI数据公布",
+    "date": "2026-06-10",
+    "category": "经济数据",
+    "importance": "MEDIUM"
+  },
+  {
+    "title": "苹果WWDC开发者大会",
+    "date": "2026-06-09",
+    "category": "其他",
+    "importance": "LOW",
+    "description": "关注AI相关发布"
+  }
+]
+```
+
+### 格式二：根节点为对象，含 `events` 字段
+
+```json
+{
+  "events": [
+    {
+      "title": "全国两会",
+      "date": "2027-03-05",
+      "category": "政策",
+      "importance": "HIGH"
+    }
+  ]
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `title` | string | ✅ | 事件标题 |
+| `date` | string | ✅ | 日期，格式必须为 `YYYY-MM-DD` |
+| `category` | string | | `政策` / `财报` / `经济数据` / `央行` / `其他`（默认：`其他`）|
+| `importance` | string | | `HIGH` / `MEDIUM` / `LOW`（默认：`MEDIUM`）|
+| `description` | string | | 事件描述，可多行文字 |
+
+> 格式不符合的条目会被跳过，导入完成后顶部会提示成功数量和跳过数量。
+
+---
+
 ## 富文本编辑器实现
 
 ### 背景

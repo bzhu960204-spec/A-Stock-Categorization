@@ -25,6 +25,13 @@ const MODULES: Module[] = [
     description: '按行业分类整理研究报告，支持 Markdown 富文本编辑',
     icon: '📋',
   },
+  {
+    id: 'calendar',
+    label: '市场日历',
+    labelEn: 'MARKET CALENDAR',
+    description: '记录影响金融市场的重要事件，按月浏览与管理',
+    icon: '🗓',
+  },
 ];
 
 interface HomePageProps {

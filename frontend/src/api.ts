@@ -167,6 +167,27 @@ export const updateIndustryChain = (stockId: number, chainId: number, payload: P
 export const deleteIndustryChain = (stockId: number, chainId: number) =>
   API.delete(`/stocks/${stockId}/industry-chains/${chainId}`);
 
+// ===== Market Calendar (市场日历) APIs =====
+export interface MarketEvent {
+  id: number;
+  title: string;
+  eventDate: string; // ISO date string "YYYY-MM-DD"
+  description?: string;
+  category?: string;  // 政策 | 财报 | 经济数据 | 央行 | 其他
+  importance?: 'HIGH' | 'MEDIUM' | 'LOW';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export const getMarketEvents = (year: number, month: number) =>
+  API.get<MarketEvent[]>('/market-events', { params: { year, month } });
+export const createMarketEvent = (event: Omit<MarketEvent, 'id' | 'createdAt' | 'updatedAt'>) =>
+  API.post<MarketEvent>('/market-events', event);
+export const updateMarketEvent = (id: number, event: Omit<MarketEvent, 'id' | 'createdAt' | 'updatedAt'>) =>
+  API.put<MarketEvent>(`/market-events/${id}`, event);
+export const deleteMarketEvent = (id: number) =>
+  API.delete(`/market-events/${id}`);
+
 // ===== Config APIs =====
 export interface AppConfig {
   twelvedataApiKey: string;
