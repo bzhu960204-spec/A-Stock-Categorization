@@ -27,6 +27,10 @@ public class StockDocument {
     @Column(nullable = false, length = 200)
     private String title;
 
+    /** 文档分类，例如：财报、调研、观察等；为空表示一般日志 */
+    @Column(length = 100)
+    private String category;
+
     @Lob
     @Column(columnDefinition = "CLOB", nullable = false)
     private String content;

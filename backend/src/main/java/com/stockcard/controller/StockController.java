@@ -117,6 +117,7 @@ public class StockController {
                     document.setStockName(stock.getName());
                     document.setTitle(payload.getTitle().trim());
                     document.setContent(payload.getContent().trim());
+                    document.setCategory(payload.getCategory() != null ? payload.getCategory().trim() : null);
 
                     StockDocument saved = stockDocumentRepository.save(document);
                     recordTimeline(stock, "DOCUMENT", "新增文档：《" + saved.getTitle() + "》");
@@ -140,6 +141,7 @@ public class StockController {
                 .map(doc -> {
                     doc.setTitle(payload.getTitle().trim());
                     doc.setContent(payload.getContent().trim());
+                    doc.setCategory(payload.getCategory() != null ? payload.getCategory().trim() : null);
                     StockDocument saved = stockDocumentRepository.save(doc);
                     stockRepository.findById(stockId).ifPresent(stock ->
                             recordTimeline(stock, "DOCUMENT", "编辑文档：《" + saved.getTitle() + "》"));
@@ -300,6 +302,7 @@ public class StockController {
         String pattern = "%" + kw + "%";
         java.util.Set<Long> docMatches = stockDocumentRepository.findStockIdsByTitleOrContentContaining(pattern);
         java.util.Set<Long> timelineMatches = stockTimelineRepository.findStockIdsByDescriptionContaining(pattern);
+        java.util.Set<Long> earningsMatches = earningsReportRepository.findStockIdsByTitleContaining(pattern);
         return stockRepository.findAll().stream()
             .filter(s -> contains(s.getCode(), kw)
                       || contains(s.getName(), kw)
@@ -313,7 +316,8 @@ public class StockController {
                       || contains(s.getFuture(), kw)
                       || contains(s.getFounderCeoHolding(), kw)
                       || docMatches.contains(s.getId())
-                      || timelineMatches.contains(s.getId()))
+                      || timelineMatches.contains(s.getId())
+                      || earningsMatches.contains(s.getId()))
             .collect(java.util.stream.Collectors.toList());
     }
 

@@ -13,6 +13,8 @@ public interface StockDocumentRepository extends JpaRepository<StockDocument, Lo
 
     void deleteByStockId(Long stockId);
 
-    @Query(value = "SELECT DISTINCT stock_id FROM stock_documents WHERE LOWER(title) LIKE :pattern OR LOWER(content) LIKE :pattern", nativeQuery = true)
+    @Query(value = "SELECT DISTINCT stock_id FROM stock_documents WHERE LOWER(title) LIKE :pattern OR LOWER(content) LIKE :pattern OR LOWER(COALESCE(category,'')) LIKE :pattern", nativeQuery = true)
     Set<Long> findStockIdsByTitleOrContentContaining(@Param("pattern") String pattern);
+
+    List<StockDocument> findByStockIdAndCategoryIgnoreCaseOrderByCreatedAtDesc(Long stockId, String category);
 }

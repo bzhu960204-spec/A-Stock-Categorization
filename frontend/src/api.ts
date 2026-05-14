@@ -56,6 +56,7 @@ export interface StockDocument {
   stockCode: string;
   stockName: string;
   title: string;
+  category?: string;
   content: string;
   createdAt: string;
   updatedAt: string;
@@ -74,9 +75,9 @@ export const getStockTimeline = (id: number) =>
   API.get<StockTimelineEntry[]>(`/stocks/${id}/timeline`);
 export const getStockDocuments = (id: number) =>
   API.get<StockDocument[]>(`/stocks/${id}/documents`);
-export const createStockDocument = (id: number, payload: Pick<StockDocument, 'title' | 'content'>) =>
+export const createStockDocument = (id: number, payload: Pick<StockDocument, 'title' | 'content' | 'category'>) =>
   API.post<StockDocument>(`/stocks/${id}/documents`, payload);
-export const updateStockDocument = (stockId: number, docId: number, payload: Pick<StockDocument, 'title' | 'content'>) =>
+export const updateStockDocument = (stockId: number, docId: number, payload: Pick<StockDocument, 'title' | 'content' | 'category'>) =>
   API.put<StockDocument>(`/stocks/${stockId}/documents/${docId}`, payload);
 export const deleteStockDocument = (stockId: number, docId: number) =>
   API.delete(`/stocks/${stockId}/documents/${docId}`);

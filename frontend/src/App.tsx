@@ -259,20 +259,21 @@ function App({ onGoHome }: AppProps = {}) {
   const [documentStock, setDocumentStock] = useState<Stock | null>(null);
   const [documents, setDocuments] = useState<StockDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(false);
-  const [docViewMode, setDocViewMode] = useState<'list' | 'read' | 'edit' | 'compose'>('list');
+  const [docViewMode, setDocViewMode] = useState<'list' | 'read' | 'edit' | 'compose' | 'earnings-read' | 'earnings-compose' | 'earnings-edit'>('list');
   const [selectedDocument, setSelectedDocument] = useState<StockDocument | null>(null);
   const [editDocTitle, setEditDocTitle] = useState('');
   const [editDocContent, setEditDocContent] = useState('');
+  const [editDocCategory, setEditDocCategory] = useState('');
   const editDocContentRef = useRef('');  // always tracks latest content even if state lags
   const [docSaveError, setDocSaveError] = useState('');
   const [savingDocument, setSavingDocument] = useState(false);
   const docEditorRef = useRef<DocEditorHandle>(null);
+  // 日志列表过滤
+  const [docCategoryFilter, setDocCategoryFilter] = useState('全部');
+  const [docTitleFilter, setDocTitleFilter] = useState('');
 
-  // Earnings Report state
-  const [earningsStock, setEarningsStock] = useState<Stock | null>(null);
+  // Earnings Report state (merged into the unified document panel)
   const [earningsReports, setEarningsReports] = useState<EarningsReport[]>([]);
-  const [earningsLoading, setEarningsLoading] = useState(false);
-  const [earningsViewMode, setEarningsViewMode] = useState<'list' | 'read' | 'compose' | 'edit'>('list');
   const [selectedEarnings, setSelectedEarnings] = useState<EarningsReport | null>(null);
   const [earningsFormTitle, setEarningsFormTitle] = useState('');
   const [earningsFormPeriod, setEarningsFormPeriod] = useState('');
@@ -899,21 +900,32 @@ ${chainHtmlBlocks}
     }
   };
 
-  const openDocumentCenter = async (stock: Stock) => {
+  const openDocumentCenter = async (stock: Stock, initialCategory = '全部') => {
     setDocumentStock(stock);
     setDocuments([]);
+    setEarningsReports([]);
     setDocViewMode('list');
     setSelectedDocument(null);
+    setSelectedEarnings(null);
     setEditDocTitle('');
     setEditDocContent('');
+    setEditDocCategory('');
+    setDocCategoryFilter(initialCategory);
+    setDocTitleFilter('');
     setPendingDeleteDoc(null);
+    setPendingDeleteEarnings(null);
     setDocumentsLoading(true);
     try {
-      const res = await getStockDocuments(stock.id);
-      setDocuments(res.data);
+      const [docRes, earningsRes] = await Promise.all([
+        getStockDocuments(stock.id),
+        getEarningsReports(stock.id),
+      ]);
+      setDocuments(docRes.data);
+      setEarningsReports(earningsRes.data);
     } catch (e) {
       console.error('Failed to load stock documents', e);
       setDocuments([]);
+      setEarningsReports([]);
     } finally {
       setDocumentsLoading(false);
     }
@@ -931,7 +943,7 @@ ${chainHtmlBlocks}
     setSavingDocument(true);
     try {
       const content = await processImagesBeforeSave(rawContent);
-      const res = await createStockDocument(documentStock.id, { title, content });
+      const res = await createStockDocument(documentStock.id, { title, content, category: editDocCategory.trim() || undefined });
       setDocuments(prev => [res.data, ...prev]);
       setEditDocTitle('');
       setEditDocContent('');
@@ -956,7 +968,7 @@ ${chainHtmlBlocks}
     setSavingDocument(true);
     try {
       const content = await processImagesBeforeSave(rawContent);
-      const res = await updateStockDocument(documentStock.id, selectedDocument.id, { title, content });
+      const res = await updateStockDocument(documentStock.id, selectedDocument.id, { title, content, category: editDocCategory.trim() || undefined });
       setDocuments(prev => prev.map(d => d.id === res.data.id ? res.data : d));
       setSelectedDocument(res.data);
       setDocViewMode('read');
@@ -995,25 +1007,11 @@ ${chainHtmlBlocks}
 
   // ── Earnings Report handlers ───────────────────────────────────────────────
   const openEarningsCenter = async (stock: Stock) => {
-    setEarningsStock(stock);
-    setEarningsReports([]);
-    setEarningsViewMode('list');
-    setSelectedEarnings(null);
-    setPendingDeleteEarnings(null);
-    setEarningsLoading(true);
-    try {
-      const res = await getEarningsReports(stock.id);
-      setEarningsReports(res.data);
-    } catch (e) {
-      console.error('Failed to load earnings reports', e);
-      setEarningsReports([]);
-    } finally {
-      setEarningsLoading(false);
-    }
+    await openDocumentCenter(stock, '财报');
   };
 
   const handleAddEarnings = async () => {
-    if (!earningsStock) return;
+    if (!documentStock) return;
     const title = earningsFormTitle.trim();
     if (!title) { setEarningsSaveError('请填写财报标题'); return; }
     const rawContent = (earningsFormContentRef.current || earningsFormContent).trim();
@@ -1021,7 +1019,7 @@ ${chainHtmlBlocks}
     setSavingEarnings(true);
     try {
       const content = rawContent ? await processImagesBeforeSave(rawContent) : '';
-      const res = await createEarningsReport(earningsStock.id, {
+      const res = await createEarningsReport(documentStock.id, {
         title,
         fiscalPeriod: earningsFormPeriod || undefined,
         result: (earningsFormResult as EarningsReport['result']) || undefined,
@@ -1029,7 +1027,7 @@ ${chainHtmlBlocks}
         content,
       });
       setEarningsReports(prev => [res.data, ...prev]);
-      setEarningsViewMode('list');
+      setDocViewMode('list');
     } catch (e) {
       console.error('Failed to create earnings report', e);
       setEarningsSaveError('保存失败，请检查后端是否运行');
@@ -1039,7 +1037,7 @@ ${chainHtmlBlocks}
   };
 
   const handleUpdateEarnings = async () => {
-    if (!earningsStock || !selectedEarnings) return;
+    if (!documentStock || !selectedEarnings) return;
     const title = earningsFormTitle.trim();
     if (!title) { setEarningsSaveError('请填写财报标题'); return; }
     const rawContent = (earningsFormContentRef.current || earningsFormContent).trim();
@@ -1047,7 +1045,7 @@ ${chainHtmlBlocks}
     setSavingEarnings(true);
     try {
       const content = rawContent ? await processImagesBeforeSave(rawContent) : '';
-      const res = await updateEarningsReport(earningsStock.id, selectedEarnings.id, {
+      const res = await updateEarningsReport(documentStock.id, selectedEarnings.id, {
         title,
         fiscalPeriod: earningsFormPeriod || undefined,
         result: (earningsFormResult as EarningsReport['result']) || undefined,
@@ -1056,7 +1054,7 @@ ${chainHtmlBlocks}
       });
       setEarningsReports(prev => prev.map(r => r.id === res.data.id ? res.data : r));
       setSelectedEarnings(res.data);
-      setEarningsViewMode('read');
+      setDocViewMode('earnings-read');
     } catch (e) {
       console.error('Failed to update earnings report', e);
       setEarningsSaveError('保存失败，请检查后端是否运行');
@@ -1066,14 +1064,14 @@ ${chainHtmlBlocks}
   };
 
   const handleDeleteEarnings = async () => {
-    if (!earningsStock || !pendingDeleteEarnings) return;
+    if (!documentStock || !pendingDeleteEarnings) return;
     setSavingEarnings(true);
     try {
-      await deleteEarningsReport(earningsStock.id, pendingDeleteEarnings.id);
+      await deleteEarningsReport(documentStock.id, pendingDeleteEarnings.id);
       setEarningsReports(prev => prev.filter(r => r.id !== pendingDeleteEarnings.id));
       setPendingDeleteEarnings(null);
       setSelectedEarnings(null);
-      setEarningsViewMode('list');
+      setDocViewMode('list');
     } catch (e) {
       console.error('Failed to delete earnings report', e);
     } finally {
@@ -1089,7 +1087,7 @@ ${chainHtmlBlocks}
     setEarningsFormContent('');
     earningsFormContentRef.current = '';
     setEarningsSaveError('');
-    setEarningsViewMode('compose');
+    setDocViewMode('earnings-compose');
   };
 
   const openEarningsEdit = (report: EarningsReport) => {
@@ -1102,7 +1100,7 @@ ${chainHtmlBlocks}
     setEarningsFormContent(html);
     earningsFormContentRef.current = html;
     setEarningsSaveError('');
-    setEarningsViewMode('edit');
+    setDocViewMode('earnings-edit');
   };
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1120,6 +1118,34 @@ ${chainHtmlBlocks}
   const selectedDayData = selectedTimelineDayKey
     ? (groupedTimelineDays.find(d => d.key === selectedTimelineDayKey) ?? null)
     : null;
+
+  // ── 统一日志列表（文档 + 财报合并）─────────────────────────────────────────
+  type UnifiedDocItem =
+    | { kind: 'doc'; data: StockDocument }
+    | { kind: 'earnings'; data: EarningsReport };
+
+  const allDocItems: UnifiedDocItem[] = [
+    ...documents.map(d => ({ kind: 'doc' as const, data: d })),
+    ...earningsReports.map(e => ({ kind: 'earnings' as const, data: e })),
+  ].sort((a, b) => new Date(b.data.createdAt).getTime() - new Date(a.data.createdAt).getTime());
+
+  const docFilterCategories = ['全部', '财报', ...Array.from(new Set(
+    documents.map(d => d.category).filter((c): c is string => !!c)
+  ))].filter((v, i, arr) => arr.indexOf(v) === i);
+
+  const filteredDocItems = allDocItems.filter(item => {
+    const cat = item.kind === 'earnings' ? '财报' : (item.data.category || '');
+    const catOk = docCategoryFilter === '全部' || cat === docCategoryFilter;
+    const kw = docTitleFilter.trim().toLowerCase();
+    const content = item.kind === 'earnings'
+      ? ((item.data as EarningsReport).content || '')
+      : (item.data as StockDocument).content;
+    const titleOk = !kw
+      || item.data.title.toLowerCase().includes(kw)
+      || content.replace(/<[^>]*>/g, '').toLowerCase().includes(kw);
+    return catOk && titleOk;
+  });
+  // ────────────────────────────────────────────────────────────────────────────
 
   const categoryCounts = useMemo(() => {
     const map = new Map<number, number>();
@@ -1396,14 +1422,9 @@ ${chainHtmlBlocks}
                         >⏱️</button>
                         <button
                           className="action-btn document"
-                          title="文档记录"
+                          title="研究日志"
                           onClick={() => openDocumentCenter(stock)}
                         >📄</button>
-                        <button
-                          className="action-btn earnings"
-                          title="财报分析"
-                          onClick={() => openEarningsCenter(stock)}
-                        >📊</button>
                         <button
                           className="action-btn danger"
                           title="删除"
@@ -2271,48 +2292,100 @@ ${chainHtmlBlocks}
                   </div>
                   <button
                     className="doc-new-btn"
-                    onClick={() => { setEditDocTitle(''); setEditDocContent(''); setDocViewMode('compose'); }}
+                    onClick={() => { setEditDocTitle(''); setEditDocContent(''); setEditDocCategory(docCategoryFilter !== '全部' && docCategoryFilter !== '财报' ? docCategoryFilter : ''); setDocViewMode('compose'); }}
                     disabled={savingDocument}
                   >+ 新建日志</button>
+                </div>
+
+                {/* 过滤栏 */}
+                <div className="doc-filter-bar">
+                  <div className="doc-category-pills">
+                    {docFilterCategories.map(cat => (
+                      <button
+                        key={cat}
+                        className={`doc-category-pill${docCategoryFilter === cat ? ' active' : ''}`}
+                        onClick={() => setDocCategoryFilter(cat)}
+                      >{cat}</button>
+                    ))}
+                  </div>
+                </div>
+                <div className="doc-search-bar">
+                  <input
+                    className="doc-title-search"
+                    type="text"
+                    placeholder="搜索标题或内容…"
+                    value={docTitleFilter}
+                    onChange={e => setDocTitleFilter(e.target.value)}
+                  />
+                  {docTitleFilter && (
+                    <button className="doc-search-clear" onClick={() => setDocTitleFilter('')}>×</button>
+                  )}
                 </div>
 
                 <div className="doc-list-scroll">
                   {documentsLoading ? (
                     <div className="timeline-empty">加载中...</div>
-                  ) : documents.length === 0 ? (
+                  ) : filteredDocItems.length === 0 ? (
                     <div className="doc-empty-state">
-                      <div className="doc-empty-icon">📓</div>
-                      <p>还没有日志</p>
-                      <p className="doc-empty-sub">点击「新建日志」开始记录研究心得</p>
+                      <div className="doc-empty-icon">{allDocItems.length === 0 ? '📓' : '🔍'}</div>
+                      <p>{allDocItems.length === 0 ? '还没有日志' : '没有匹配的记录'}</p>
+                      <p className="doc-empty-sub">{allDocItems.length === 0 ? '点击「新建日志」或「新建财报」开始记录' : '请调整搜索或分类过滤条件'}</p>
                     </div>
                   ) : (
                     <div className="doc-list">
-                      {documents.map(doc => {
-                        // Remove HTML tags if content is HTML, otherwise remove markdown syntax
-                        const cleanContent = doc.content.trimStart().startsWith('<')
-                          ? doc.content.replace(/<[^>]*>/g, '') // Strip HTML tags
-                          : doc.content.replace(/[#*`>\-_~\[\]()]/g, ''); // Strip markdown syntax
+                      {filteredDocItems.map(item => {
+                        const isEarnings = item.kind === 'earnings';
+                        const title = item.data.title;
+                        const createdAt = item.data.createdAt;
+                        const category = isEarnings ? '财报' : ((item.data as StockDocument).category || '');
+                        const rawContent = isEarnings ? ((item.data as EarningsReport).content || '') : (item.data as StockDocument).content;
+                        const cleanContent = rawContent.trimStart().startsWith('<')
+                          ? rawContent.replace(/<[^>]*>/g, '')
+                          : rawContent.replace(/[#*`>\-_~\[\]()]/g, '');
                         const preview = cleanContent.trim().slice(0, 120);
-                        const wordCount = doc.content.length;
-                        const dt = new Date(doc.createdAt);
+                        const dt = new Date(createdAt);
                         const timeStr = dt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+                        // Earnings-specific badges
+                        let resultLabel: string | null = null;
+                        let resultClass = '';
+                        if (isEarnings) {
+                          const r = (item.data as EarningsReport).result;
+                          resultLabel = r === 'BEAT' ? '超预期' : r === 'MISS' ? '低预期' : r === 'IN_LINE' ? '符合预期' : null;
+                          resultClass = r === 'BEAT' ? 'earnings-beat' : r === 'MISS' ? 'earnings-miss' : r === 'IN_LINE' ? 'earnings-inline' : '';
+                        }
+
                         return (
                           <article
-                            key={doc.id}
+                            key={`${item.kind}-${item.data.id}`}
                             className="doc-card"
-                            onClick={() => { setSelectedDocument(doc); setDocViewMode('read'); }}
+                            onClick={() => {
+                              if (isEarnings) {
+                                setSelectedEarnings(item.data as EarningsReport);
+                                setDocViewMode('earnings-read');
+                              } else {
+                                setSelectedDocument(item.data as StockDocument);
+                                setDocViewMode('read');
+                              }
+                            }}
                           >
                             <div className="doc-card-date">
                               <span className="doc-card-day">{dt.getDate()}</span>
                               <span className="doc-card-month">{dt.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short' })}</span>
                             </div>
                             <div className="doc-card-body">
-                              <h3 className="doc-card-title">{doc.title}</h3>
-                              <p className="doc-card-preview">{preview}{doc.content.length > 120 ? '…' : ''}</p>
+                              <div className="doc-card-title-row">
+                                <h3 className="doc-card-title">{title}</h3>
+                                {category && <span className={`doc-category-badge${isEarnings ? ' earnings-cat' : ''}`}>{category}</span>}
+                                {resultLabel && <span className={`earnings-result-badge ${resultClass}`}>{resultLabel}</span>}
+                              </div>
+                              <p className="doc-card-preview">{preview}{rawContent.length > 120 ? '…' : ''}</p>
                               <div className="doc-card-meta">
                                 <span>{timeStr}</span>
-                                <span>{wordCount} 字</span>
-                                {doc.updatedAt !== doc.createdAt && <span>已编辑</span>}
+                                {isEarnings && (item.data as EarningsReport).fiscalPeriod && <span>{(item.data as EarningsReport).fiscalPeriod}</span>}
+                                {isEarnings && (item.data as EarningsReport).reportDate && <span>发布：{(item.data as EarningsReport).reportDate}</span>}
+                                {!isEarnings && <span>{rawContent.length} 字</span>}
+                                {!isEarnings && (item.data as StockDocument).updatedAt !== createdAt && <span>已编辑</span>}
                               </div>
                             </div>
                             <span className="doc-card-arrow">›</span>
@@ -2342,6 +2415,7 @@ ${chainHtmlBlocks}
                         ? raw
                         : String(marked.parse(raw));
                       setEditDocTitle(selectedDocument.title);
+                      setEditDocCategory(selectedDocument.category || '');
                       setEditDocContent(html);
                       editDocContentRef.current = html;
                       setDocViewMode('edit');
@@ -2355,6 +2429,9 @@ ${chainHtmlBlocks}
                     <time>{new Date(selectedDocument.createdAt).toLocaleString('zh-CN', { hour12: false })}</time>
                     {selectedDocument.updatedAt !== selectedDocument.createdAt && (
                       <span className="doc-read-edited">已编辑 · {new Date(selectedDocument.updatedAt).toLocaleString('zh-CN', { hour12: false })}</span>
+                    )}
+                    {selectedDocument.category && (
+                      <span className="doc-category-badge">{selectedDocument.category}</span>
                     )}
                   </div>
                   <h1 className="doc-read-title">{selectedDocument.title}</h1>
@@ -2416,7 +2493,26 @@ ${chainHtmlBlocks}
                         onChange={e => { setEditDocTitle(e.target.value); if (docSaveError) setDocSaveError(''); }}
                         autoFocus
                       />
-
+                    </div>
+                    <div className="doc-compose-category-row">
+                      <label className="doc-compose-category-label">分类：</label>
+                      <input
+                        className="doc-compose-category-input"
+                        type="text"
+                        list="doc-category-presets"
+                        placeholder="留空 / 财报 / 调研 / 观察…"
+                        value={editDocCategory}
+                        onChange={e => setEditDocCategory(e.target.value)}
+                      />
+                      <datalist id="doc-category-presets">
+                        {docFilterCategories.filter(c => c !== '全部').map(c => (
+                          <option key={c} value={c} />
+                        ))}
+                        <option value="财报" />
+                        <option value="调研" />
+                        <option value="观察" />
+                        <option value="会议纪要" />
+                      </datalist>
                     </div>
                   </div>
                   <div className="rp-modal-header-right">
@@ -2448,91 +2544,11 @@ ${chainHtmlBlocks}
               </>
             )}
 
-          </div>
-        </div>
-      )}
-
-      {/* Earnings Report Modal */}
-      {earningsStock && (
-        <div className="modal-overlay" onClick={() => !savingEarnings && setEarningsStock(null)}>
-          <div className="glass-modal document-modal" onClick={e => e.stopPropagation()}>
-
-            {/* ---- List View ---- */}
-            {earningsViewMode === 'list' && (
+            {/* ---- Earnings Read View ---- */}
+            {docViewMode === 'earnings-read' && selectedEarnings && (
               <>
                 <div className="doc-modal-header">
-                  <div className="doc-modal-title-row">
-                    <h2>{earningsStock.code} {earningsStock.name}</h2>
-                    <span className="doc-modal-subtitle">财报分析</span>
-                  </div>
-                  <button
-                    className="doc-new-btn"
-                    onClick={openEarningsCompose}
-                    disabled={savingEarnings}
-                  >+ 新建财报记录</button>
-                </div>
-
-                <div className="doc-list-scroll">
-                  {earningsLoading ? (
-                    <div className="timeline-empty">加载中...</div>
-                  ) : earningsReports.length === 0 ? (
-                    <div className="doc-empty-state">
-                      <div className="doc-empty-icon">📊</div>
-                      <p>还没有财报记录</p>
-                      <p className="doc-empty-sub">点击「新建财报记录」开始整理财报分析</p>
-                    </div>
-                  ) : (
-                    <div className="doc-list">
-                      {earningsReports.map(report => {
-                        const resultLabel = report.result === 'BEAT' ? '超预期' : report.result === 'MISS' ? '低预期' : report.result === 'IN_LINE' ? '符合预期' : null;
-                        const resultClass = report.result === 'BEAT' ? 'earnings-beat' : report.result === 'MISS' ? 'earnings-miss' : report.result === 'IN_LINE' ? 'earnings-inline' : '';
-                        const cleanContent = report.content
-                          ? (report.content.trimStart().startsWith('<')
-                            ? report.content.replace(/<[^>]*>/g, '')
-                            : report.content.replace(/[#*`>\-_~\[\]()]/g, ''))
-                          : '';
-                        const preview = cleanContent.trim().slice(0, 120);
-                        const dt = new Date(report.createdAt);
-                        return (
-                          <article
-                            key={report.id}
-                            className="doc-card"
-                            onClick={() => { setSelectedEarnings(report); setEarningsViewMode('read'); }}
-                          >
-                            <div className="doc-card-date">
-                              <span className="doc-card-day">{dt.getDate()}</span>
-                              <span className="doc-card-month">{dt.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short' })}</span>
-                            </div>
-                            <div className="doc-card-body">
-                              <div className="doc-card-title-row">
-                                <h3 className="doc-card-title">{report.title}</h3>
-                                {resultLabel && <span className={`earnings-result-badge ${resultClass}`}>{resultLabel}</span>}
-                              </div>
-                              <p className="doc-card-preview">{preview}{cleanContent.length > 120 ? '…' : ''}</p>
-                              <div className="doc-card-meta">
-                                {report.fiscalPeriod && <span>{report.fiscalPeriod}</span>}
-                                {report.reportDate && <span>发布：{report.reportDate}</span>}
-                              </div>
-                            </div>
-                            <span className="doc-card-arrow">›</span>
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                <div className="modal-actions sticky-actions">
-                  <button className="cancel-btn" onClick={() => setEarningsStock(null)}>关闭</button>
-                </div>
-              </>
-            )}
-
-            {/* ---- Read View ---- */}
-            {earningsViewMode === 'read' && selectedEarnings && (
-              <>
-                <div className="doc-modal-header">
-                  <button className="doc-back-btn" onClick={() => setEarningsViewMode('list')}>‹ 返回列表</button>
+                  <button className="doc-back-btn" onClick={() => setDocViewMode('list')}>‹ 返回列表</button>
                   <div className="doc-read-actions">
                     <button className="doc-action-edit" onClick={() => openEarningsEdit(selectedEarnings)}>编辑</button>
                     <button className="doc-action-delete" onClick={() => setPendingDeleteEarnings(selectedEarnings)}>删除</button>
@@ -2545,6 +2561,7 @@ ${chainHtmlBlocks}
                     {selectedEarnings.updatedAt !== selectedEarnings.createdAt && (
                       <span className="doc-read-edited">已编辑 · {new Date(selectedEarnings.updatedAt).toLocaleString('zh-CN', { hour12: false })}</span>
                     )}
+                    <span className="doc-category-badge earnings-cat">财报</span>
                   </div>
                   <div className="earnings-read-header">
                     <h1 className="doc-read-title">{selectedEarnings.title}</h1>
@@ -2574,7 +2591,7 @@ ${chainHtmlBlocks}
                 </div>
 
                 <div className="modal-actions sticky-actions">
-                  <button className="cancel-btn" onClick={() => setEarningsViewMode('list')}>返回列表</button>
+                  <button className="cancel-btn" onClick={() => setDocViewMode('list')}>返回列表</button>
                 </div>
 
                 {pendingDeleteEarnings && (
@@ -2598,18 +2615,18 @@ ${chainHtmlBlocks}
               </>
             )}
 
-            {/* ---- Compose / Edit View ---- */}
-            {(earningsViewMode === 'compose' || earningsViewMode === 'edit') && (
+            {/* ---- Earnings Compose / Edit View ---- */}
+            {(docViewMode === 'earnings-compose' || docViewMode === 'earnings-edit') && (
               <>
                 <div className="rp-modal-header">
                   <div className="rp-modal-header-left doc-compose-edit-meta">
                     <div className="doc-compose-header-top">
                       <button className="doc-back-btn" onClick={() => {
-                        if (earningsViewMode === 'edit') setEarningsViewMode('read');
-                        else setEarningsViewMode('list');
-                      }}>‹ {earningsViewMode === 'edit' ? '返回阅读' : '返回列表'}</button>
+                        if (docViewMode === 'earnings-edit') setDocViewMode('earnings-read');
+                        else setDocViewMode('list');
+                      }}>‹ {docViewMode === 'earnings-edit' ? '返回阅读' : '返回列表'}</button>
                       <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                        {earningsViewMode === 'edit' ? '编辑财报记录' : '新建财报记录'}
+                        {docViewMode === 'earnings-edit' ? '编辑财报记录' : '新建财报记录'}
                       </span>
                     </div>
                     <div className="doc-compose-title-row">
@@ -2652,12 +2669,12 @@ ${chainHtmlBlocks}
                   <div className="rp-modal-header-right">
                     {earningsSaveError && <span className="doc-save-error" style={{ flex: 'unset' }}>{earningsSaveError}</span>}
                     <button className="cancel-btn" onClick={() => {
-                      if (earningsViewMode === 'edit') setEarningsViewMode('read');
-                      else setEarningsViewMode('list');
+                      if (docViewMode === 'earnings-edit') setDocViewMode('earnings-read');
+                      else setDocViewMode('list');
                     }} disabled={savingEarnings}>取消</button>
                     <button
                       className="confirm-btn"
-                      onClick={earningsViewMode === 'edit' ? handleUpdateEarnings : handleAddEarnings}
+                      onClick={docViewMode === 'earnings-edit' ? handleUpdateEarnings : handleAddEarnings}
                       disabled={savingEarnings}
                     >{savingEarnings ? '保存中...' : '保存财报'}</button>
                   </div>

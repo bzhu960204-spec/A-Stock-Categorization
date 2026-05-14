@@ -1556,6 +1556,133 @@ body {
 }
 .doc-new-btn:disabled { opacity: 0.4; cursor: default; }
 
+/* Multiple new-doc buttons side by side */
+.doc-new-btn-group {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* Earnings new button variant */
+.earnings-new-btn {
+  background: color-mix(in srgb, #34d399 12%, transparent);
+  color: #34d399;
+  border-color: color-mix(in srgb, #34d399 35%, transparent);
+}
+.earnings-new-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, #34d399 22%, transparent);
+  border-color: color-mix(in srgb, #34d399 55%, transparent);
+}
+
+/* ── Doc filter bar ─────────────────────────────────────── */
+.doc-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 20px 4px;
+  border-bottom: 1px solid var(--border-faint);
+}
+.doc-category-pills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.doc-category-pill {
+  padding: 2px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-mid);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.doc-category-pill.active,
+.doc-category-pill:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+/* Search row */
+.doc-search-bar {
+  display: flex;
+  align-items: center;
+  padding: 5px 20px 6px;
+  border-bottom: 1px solid var(--border-faint);
+  gap: 6px;
+}
+.doc-title-search {
+  flex: 1;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-mid);
+  background: var(--input-bg, transparent);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+.doc-title-search::placeholder { color: var(--text-muted); }
+.doc-search-clear {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: var(--border-mid);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.doc-search-clear:hover { background: var(--border-strong, #666); color: var(--text-primary); }
+
+/* Doc category badge in card / read */
+.doc-category-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 10px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  flex-shrink: 0;
+}
+.doc-category-badge.earnings-cat {
+  background: color-mix(in srgb, #34d399 12%, transparent);
+  color: #34d399;
+  border-color: color-mix(in srgb, #34d399 30%, transparent);
+}
+
+/* Category input in compose form */
+.doc-compose-category-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.doc-compose-category-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.doc-compose-category-input {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-mid);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  width: 160px;
+}
+.doc-compose-category-input::placeholder { color: var(--text-muted); }
+
 .doc-list-scroll {
   flex: 1;
   overflow-y: auto;
