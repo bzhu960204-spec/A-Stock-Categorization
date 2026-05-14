@@ -32,6 +32,13 @@ const MODULES: Module[] = [
     description: '记录影响金融市场的重要事件，按月浏览与管理',
     icon: '🗓',
   },
+  {
+    id: 'techcycle',
+    label: '技术周期',
+    labelEn: 'TECH CYCLE',
+    description: '记录不同技术与板块的发展周期与趋势时间线',
+    icon: '⏱',
+  },
 ];
 
 interface HomePageProps {

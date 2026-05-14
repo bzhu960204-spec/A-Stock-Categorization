@@ -240,6 +240,59 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const stripHtml = (html: string) =>
     html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
 
+  const handleExportPdf = (report: SectorReport) => {
+    const stars = '★'.repeat(report.rating ?? 0) + '☆'.repeat(5 - (report.rating ?? 0));
+    const metaParts = [
+      report.sectorName ? `行业：${report.sectorName}` : (selectedSector ? `行业：${selectedSector.name}` : ''),
+      report.source ? `来源：${report.source}` : '',
+      report.reportDate ? `报告日期：${report.reportDate}` : '',
+      report.createdAt ? `录入日期：${new Date(report.createdAt).toLocaleDateString('zh-CN')}` : '',
+    ].filter(Boolean).join('　|　');
+
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>${report.title}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: "PingFang SC", "Microsoft YaHei", "SimSun", sans-serif; font-size: 14px; color: #1a1a1a; background: #fff; padding: 40px 48px; }
+    .report-title { font-size: 22px; font-weight: 700; line-height: 1.4; margin-bottom: 10px; }
+    .report-stars { font-size: 18px; color: #f5a623; letter-spacing: 2px; margin-bottom: 6px; }
+    .report-meta { font-size: 12px; color: #666; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 24px; }
+    .report-content { line-height: 1.8; }
+    .report-content p { margin-bottom: 0.8em; }
+    .report-content h1, .report-content h2, .report-content h3 { margin: 1em 0 0.5em; font-weight: 600; }
+    .report-content ul, .report-content ol { margin: 0.5em 0 0.8em 1.5em; }
+    .report-content li { margin-bottom: 0.3em; }
+    .report-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+    .report-content th, .report-content td { border: 1px solid #ccc; padding: 6px 10px; font-size: 13px; }
+    .report-content th { background: #f5f5f5; font-weight: 600; }
+    .report-content blockquote { border-left: 3px solid #ccc; padding-left: 12px; color: #555; margin: 0.8em 0; }
+    .report-content strong { font-weight: 700; }
+    .report-content em { font-style: italic; }
+    @media print {
+      body { padding: 20px 28px; }
+      @page { size: A4; margin: 20mm 18mm; }
+    }
+  </style>
+</head>
+<body>
+  <div class="report-title">${report.title}</div>
+  <div class="report-stars">${stars}</div>
+  <div class="report-meta">${metaParts}</div>
+  <div class="report-content">${report.content || '<p>（无内容）</p>'}</div>
+  <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };<\/script>
+</body>
+</html>`;
+
+    const win = window.open('', '_blank', 'width=900,height=700');
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  };
+
   return (
     <div className="app-container">
       <header className="glass-header">
@@ -526,6 +579,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                     </div>
                   </div>
                   <div className="rp-modal-header-right">
+                    <button className="icon-btn" onClick={() => modalReport && handleExportPdf(modalReport)} title="导出为 PDF">⬇ 导出PDF</button>
                     <button className="icon-btn" onClick={() => switchToEdit(modalReport!)}>✎ 编辑</button>
                     <button className="icon-btn" onClick={closeModal}>✕ 关闭</button>
                   </div>

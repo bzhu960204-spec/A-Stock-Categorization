@@ -1,10 +1,12 @@
 package com.stockcard.controller;
 
 import com.stockcard.entity.Category;
+import com.stockcard.entity.EarningsReport;
 import com.stockcard.entity.StockDocument;
 import com.stockcard.entity.Stock;
 import com.stockcard.entity.StockTimeline;
 import com.stockcard.repository.CategoryRepository;
+import com.stockcard.repository.EarningsReportRepository;
 import com.stockcard.repository.IndustryChainRepository;
 import com.stockcard.repository.StockDocumentRepository;
 import com.stockcard.repository.StockRepository;
@@ -30,6 +32,7 @@ public class StockController {
     private final StockTimelineRepository stockTimelineRepository;
     private final StockDocumentRepository stockDocumentRepository;
     private final IndustryChainRepository industryChainRepository;
+    private final EarningsReportRepository earningsReportRepository;
 
     @GetMapping
     public List<Stock> getAllStocks() {
@@ -85,6 +88,7 @@ public class StockController {
                     recordTimeline(stock, "DELETE", "删除股票记录");
                     stockDocumentRepository.deleteByStockId(stock.getId());
                     industryChainRepository.deleteByStockId(stock.getId());
+                    earningsReportRepository.deleteByStockId(stock.getId());
                     stockRepository.delete(stock);
                     return ResponseEntity.ok().<Void>build();
                 })
@@ -155,6 +159,73 @@ public class StockController {
                     stockDocumentRepository.delete(doc);
                     stockRepository.findById(stockId).ifPresent(stock ->
                             recordTimeline(stock, "DOCUMENT", "删除文档：《" + doc.getTitle() + "》"));
+                    return ResponseEntity.ok().<Void>build();
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── Earnings Reports ──────────────────────────────────────────────────────
+
+    @GetMapping("/{id}/earnings")
+    public ResponseEntity<List<EarningsReport>> getEarningsReports(@PathVariable Long id) {
+        if (!stockRepository.existsById(id)) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(earningsReportRepository.findByStockIdOrderByReportDateDescCreatedAtDesc(id));
+    }
+
+    @PostMapping("/{id}/earnings")
+    public ResponseEntity<EarningsReport> createEarningsReport(
+            @PathVariable Long id, @RequestBody EarningsReport payload) {
+        if (payload == null || isBlank(payload.getTitle())) return ResponseEntity.badRequest().build();
+        return stockRepository.findById(id)
+                .map(stock -> {
+                    EarningsReport report = new EarningsReport();
+                    report.setStockId(stock.getId());
+                    report.setStockCode(stock.getCode());
+                    report.setStockName(stock.getName());
+                    report.setTitle(payload.getTitle().trim());
+                    report.setFiscalPeriod(payload.getFiscalPeriod());
+                    report.setResult(payload.getResult());
+                    report.setReportDate(payload.getReportDate());
+                    report.setContent(payload.getContent() != null ? payload.getContent().trim() : "");
+                    EarningsReport saved = earningsReportRepository.save(report);
+                    recordTimeline(stock, "EARNINGS", "新增财报记录：" + saved.getTitle());
+                    return ResponseEntity.ok(saved);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{stockId}/earnings/{reportId}")
+    public ResponseEntity<EarningsReport> updateEarningsReport(
+            @PathVariable Long stockId,
+            @PathVariable Long reportId,
+            @RequestBody EarningsReport payload) {
+        if (payload == null || isBlank(payload.getTitle())) return ResponseEntity.badRequest().build();
+        return earningsReportRepository.findById(reportId)
+                .filter(r -> r.getStockId().equals(stockId))
+                .map(r -> {
+                    r.setTitle(payload.getTitle().trim());
+                    r.setFiscalPeriod(payload.getFiscalPeriod());
+                    r.setResult(payload.getResult());
+                    r.setReportDate(payload.getReportDate());
+                    r.setContent(payload.getContent() != null ? payload.getContent().trim() : "");
+                    EarningsReport saved = earningsReportRepository.save(r);
+                    stockRepository.findById(stockId).ifPresent(stock ->
+                            recordTimeline(stock, "EARNINGS", "编辑财报记录：" + saved.getTitle()));
+                    return ResponseEntity.ok(saved);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{stockId}/earnings/{reportId}")
+    public ResponseEntity<Void> deleteEarningsReport(
+            @PathVariable Long stockId,
+            @PathVariable Long reportId) {
+        return earningsReportRepository.findById(reportId)
+                .filter(r -> r.getStockId().equals(stockId))
+                .map(r -> {
+                    earningsReportRepository.delete(r);
+                    stockRepository.findById(stockId).ifPresent(stock ->
+                            recordTimeline(stock, "EARNINGS", "删除财报记录：" + r.getTitle()));
                     return ResponseEntity.ok().<Void>build();
                 })
                 .orElse(ResponseEntity.notFound().build());

@@ -3,8 +3,9 @@ import App from './App';
 import HomePage from './HomePage';
 import ResearchModule from './ResearchModule';
 import CalendarModule from './CalendarModule';
+import TechCycleModule from './TechCycleModule';
 
-export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar';
+export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle';
 
 export default function Root() {
   const [module, setModule] = useState<ModuleId>(() => {
@@ -24,6 +25,9 @@ export default function Root() {
   }
   if (module === 'calendar') {
     return <CalendarModule onGoHome={() => setModule('home')} />;
+  }
+  if (module === 'techcycle') {
+    return <TechCycleModule onGoHome={() => setModule('home')} />;
   }
   return <HomePage onSelectModule={setModule} />;
 }

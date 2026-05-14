@@ -148,6 +148,30 @@ export const updateSectorReportRating = (sectorId: number, reportId: number, rat
 export const deleteSectorReport = (sectorId: number, reportId: number) =>
   API.delete(`/research/sectors/${sectorId}/reports/${reportId}`);
 
+// ===== Earnings Reports (财报分析) APIs =====
+export interface EarningsReport {
+  id: number;
+  stockId: number;
+  stockCode: string;
+  stockName: string;
+  title: string;
+  fiscalPeriod?: string;
+  result?: 'BEAT' | 'MISS' | 'IN_LINE';
+  reportDate?: string; // ISO date "YYYY-MM-DD"
+  content?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getEarningsReports = (stockId: number) =>
+  API.get<EarningsReport[]>(`/stocks/${stockId}/earnings`);
+export const createEarningsReport = (stockId: number, payload: Omit<EarningsReport, 'id' | 'stockId' | 'stockCode' | 'stockName' | 'createdAt' | 'updatedAt'>) =>
+  API.post<EarningsReport>(`/stocks/${stockId}/earnings`, payload);
+export const updateEarningsReport = (stockId: number, reportId: number, payload: Omit<EarningsReport, 'id' | 'stockId' | 'stockCode' | 'stockName' | 'createdAt' | 'updatedAt'>) =>
+  API.put<EarningsReport>(`/stocks/${stockId}/earnings/${reportId}`, payload);
+export const deleteEarningsReport = (stockId: number, reportId: number) =>
+  API.delete(`/stocks/${stockId}/earnings/${reportId}`);
+
 // ===== Industry Chain (产业链) APIs =====
 export interface IndustryChain {
   id: number;
@@ -187,6 +211,41 @@ export const updateMarketEvent = (id: number, event: Omit<MarketEvent, 'id' | 'c
   API.put<MarketEvent>(`/market-events/${id}`, event);
 export const deleteMarketEvent = (id: number) =>
   API.delete(`/market-events/${id}`);
+
+// ===== Tech Cycle (技术周期) APIs =====
+export interface TechCycle {
+  id: number;
+  name: string;
+  description?: string;
+  color?: string;
+  createdAt?: string;
+}
+
+export interface TechCyclePhase {
+  id: number;
+  techCycleId: number;
+  title: string;
+  phaseType?: 'BUDDING' | 'GROWTH' | 'BOOM' | 'MATURE' | 'DECLINE' | 'CUSTOM';
+  startYear: number;
+  startQuarter?: number;
+  endYear: number;
+  endQuarter?: number;
+  notes?: string;
+  sortOrder?: number;
+}
+
+export const getTechCycles = () => API.get<TechCycle[]>('/tech-cycles');
+export const createTechCycle = (c: Omit<TechCycle, 'id' | 'createdAt'>) => API.post<TechCycle>('/tech-cycles', c);
+export const updateTechCycle = (id: number, c: Omit<TechCycle, 'id' | 'createdAt'>) => API.put<TechCycle>(`/tech-cycles/${id}`, c);
+export const deleteTechCycle = (id: number) => API.delete(`/tech-cycles/${id}`);
+
+export const getTechCyclePhases = (cycleId: number) => API.get<TechCyclePhase[]>(`/tech-cycles/${cycleId}/phases`);
+export const createTechCyclePhase = (cycleId: number, p: Omit<TechCyclePhase, 'id' | 'techCycleId'>) =>
+  API.post<TechCyclePhase>(`/tech-cycles/${cycleId}/phases`, p);
+export const updateTechCyclePhase = (cycleId: number, phaseId: number, p: Omit<TechCyclePhase, 'id' | 'techCycleId'>) =>
+  API.put<TechCyclePhase>(`/tech-cycles/${cycleId}/phases/${phaseId}`, p);
+export const deleteTechCyclePhase = (cycleId: number, phaseId: number) =>
+  API.delete(`/tech-cycles/${cycleId}/phases/${phaseId}`);
 
 // ===== Config APIs =====
 export interface AppConfig {

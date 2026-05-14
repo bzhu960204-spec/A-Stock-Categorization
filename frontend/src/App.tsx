@@ -10,7 +10,8 @@ import {
   lookupGlobalStock, lookupGlobalStockSuggest,
   getStockTimeline, getStockDocuments, createStockDocument, updateStockDocument, deleteStockDocument, uploadDocImage,
   getIndustryChains, createIndustryChain, updateIndustryChain, deleteIndustryChain,
-  type Stock, type Category, type LookupSuggestion, type StockTimelineEntry, type StockDocument, type IndustryChain
+  getEarningsReports, createEarningsReport, updateEarningsReport, deleteEarningsReport,
+  type Stock, type Category, type LookupSuggestion, type StockTimelineEntry, type StockDocument, type IndustryChain, type EarningsReport
 } from './api';
 import './App.css';
 
@@ -187,9 +188,12 @@ function App({ onGoHome }: AppProps = {}) {
   const [marketFilters, setMarketFilters] = useState<Set<string>>(new Set()); // empty = show all
   const [starFilter, setStarFilter] = useState<number | null>(null); // null = 全部, 1-5 = 至少N星
 
+  // Category filter popup modal
+  const [showCategoryFilterModal, setShowCategoryFilterModal] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+
   // Sidebar collapse state
   const [marketCollapsed, setMarketCollapsed] = useState(false);
-  const [categoryCollapsed, setCategoryCollapsed] = useState(false);
   const [starCollapsed, setStarCollapsed] = useState(false);
 
   // Add stock dialog
@@ -263,6 +267,23 @@ function App({ onGoHome }: AppProps = {}) {
   const [docSaveError, setDocSaveError] = useState('');
   const [savingDocument, setSavingDocument] = useState(false);
   const docEditorRef = useRef<DocEditorHandle>(null);
+
+  // Earnings Report state
+  const [earningsStock, setEarningsStock] = useState<Stock | null>(null);
+  const [earningsReports, setEarningsReports] = useState<EarningsReport[]>([]);
+  const [earningsLoading, setEarningsLoading] = useState(false);
+  const [earningsViewMode, setEarningsViewMode] = useState<'list' | 'read' | 'compose' | 'edit'>('list');
+  const [selectedEarnings, setSelectedEarnings] = useState<EarningsReport | null>(null);
+  const [earningsFormTitle, setEarningsFormTitle] = useState('');
+  const [earningsFormPeriod, setEarningsFormPeriod] = useState('');
+  const [earningsFormResult, setEarningsFormResult] = useState<'BEAT' | 'MISS' | 'IN_LINE' | ''>('');
+  const [earningsFormDate, setEarningsFormDate] = useState('');
+  const [earningsFormContent, setEarningsFormContent] = useState('');
+  const earningsFormContentRef = useRef('');
+  const [earningsSaveError, setEarningsSaveError] = useState('');
+  const [savingEarnings, setSavingEarnings] = useState(false);
+  const [pendingDeleteEarnings, setPendingDeleteEarnings] = useState<EarningsReport | null>(null);
+  const earningsEditorRef = useRef<DocEditorHandle>(null);
 
   // Industry chain state
   const [showIndustryChainModal, setShowIndustryChainModal] = useState(false);
@@ -969,7 +990,121 @@ ${chainHtmlBlocks}
     CATEGORY: '分类',
     DELETE: '删除',
     DOCUMENT: '文档',
+    EARNINGS: '财报',
   };
+
+  // ── Earnings Report handlers ───────────────────────────────────────────────
+  const openEarningsCenter = async (stock: Stock) => {
+    setEarningsStock(stock);
+    setEarningsReports([]);
+    setEarningsViewMode('list');
+    setSelectedEarnings(null);
+    setPendingDeleteEarnings(null);
+    setEarningsLoading(true);
+    try {
+      const res = await getEarningsReports(stock.id);
+      setEarningsReports(res.data);
+    } catch (e) {
+      console.error('Failed to load earnings reports', e);
+      setEarningsReports([]);
+    } finally {
+      setEarningsLoading(false);
+    }
+  };
+
+  const handleAddEarnings = async () => {
+    if (!earningsStock) return;
+    const title = earningsFormTitle.trim();
+    if (!title) { setEarningsSaveError('请填写财报标题'); return; }
+    const rawContent = (earningsFormContentRef.current || earningsFormContent).trim();
+    setEarningsSaveError('');
+    setSavingEarnings(true);
+    try {
+      const content = rawContent ? await processImagesBeforeSave(rawContent) : '';
+      const res = await createEarningsReport(earningsStock.id, {
+        title,
+        fiscalPeriod: earningsFormPeriod || undefined,
+        result: (earningsFormResult as EarningsReport['result']) || undefined,
+        reportDate: earningsFormDate || undefined,
+        content,
+      });
+      setEarningsReports(prev => [res.data, ...prev]);
+      setEarningsViewMode('list');
+    } catch (e) {
+      console.error('Failed to create earnings report', e);
+      setEarningsSaveError('保存失败，请检查后端是否运行');
+    } finally {
+      setSavingEarnings(false);
+    }
+  };
+
+  const handleUpdateEarnings = async () => {
+    if (!earningsStock || !selectedEarnings) return;
+    const title = earningsFormTitle.trim();
+    if (!title) { setEarningsSaveError('请填写财报标题'); return; }
+    const rawContent = (earningsFormContentRef.current || earningsFormContent).trim();
+    setEarningsSaveError('');
+    setSavingEarnings(true);
+    try {
+      const content = rawContent ? await processImagesBeforeSave(rawContent) : '';
+      const res = await updateEarningsReport(earningsStock.id, selectedEarnings.id, {
+        title,
+        fiscalPeriod: earningsFormPeriod || undefined,
+        result: (earningsFormResult as EarningsReport['result']) || undefined,
+        reportDate: earningsFormDate || undefined,
+        content,
+      });
+      setEarningsReports(prev => prev.map(r => r.id === res.data.id ? res.data : r));
+      setSelectedEarnings(res.data);
+      setEarningsViewMode('read');
+    } catch (e) {
+      console.error('Failed to update earnings report', e);
+      setEarningsSaveError('保存失败，请检查后端是否运行');
+    } finally {
+      setSavingEarnings(false);
+    }
+  };
+
+  const handleDeleteEarnings = async () => {
+    if (!earningsStock || !pendingDeleteEarnings) return;
+    setSavingEarnings(true);
+    try {
+      await deleteEarningsReport(earningsStock.id, pendingDeleteEarnings.id);
+      setEarningsReports(prev => prev.filter(r => r.id !== pendingDeleteEarnings.id));
+      setPendingDeleteEarnings(null);
+      setSelectedEarnings(null);
+      setEarningsViewMode('list');
+    } catch (e) {
+      console.error('Failed to delete earnings report', e);
+    } finally {
+      setSavingEarnings(false);
+    }
+  };
+
+  const openEarningsCompose = () => {
+    setEarningsFormTitle('');
+    setEarningsFormPeriod('');
+    setEarningsFormResult('');
+    setEarningsFormDate('');
+    setEarningsFormContent('');
+    earningsFormContentRef.current = '';
+    setEarningsSaveError('');
+    setEarningsViewMode('compose');
+  };
+
+  const openEarningsEdit = (report: EarningsReport) => {
+    const raw = report.content ?? '';
+    const html = raw.trimStart().startsWith('<') ? raw : String(marked.parse(raw));
+    setEarningsFormTitle(report.title);
+    setEarningsFormPeriod(report.fiscalPeriod ?? '');
+    setEarningsFormResult(report.result ?? '');
+    setEarningsFormDate(report.reportDate ?? '');
+    setEarningsFormContent(html);
+    earningsFormContentRef.current = html;
+    setEarningsSaveError('');
+    setEarningsViewMode('edit');
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
 
   // Toggle category filter
   const toggleCategoryFilter = (id: number) => {
@@ -1074,70 +1209,57 @@ ${chainHtmlBlocks}
             )}
           </div>
 
-          {/* Category filter — collapsible */}
+          {/* Category filter — popup modal */}
           <div className="sidebar-section">
-            <div className="section-header section-header-collapsible" onClick={() => setCategoryCollapsed(c => !c)}>
+            <div className="section-header">
               <h3>
                 分类标签
                 {selectedCategoryIds.size > 0 && <span className="filter-badge">{selectedCategoryIds.size}</span>}
               </h3>
-              <div className="section-header-right" onClick={e => e.stopPropagation()}>
+              <div className="section-header-right">
                 <button className="small-btn" onClick={() => { setShowAddCategory(true); setNewCategoryColor(pickUnusedColor()); setNewCategoryDesc(''); }}>+</button>
-                <span className="collapse-chevron" onClick={() => setCategoryCollapsed(c => !c)}>{categoryCollapsed ? '▸' : '▾'}</span>
               </div>
             </div>
-            {!categoryCollapsed && (
-              <>
-                <div className="filter-mode">
-                  <button
-                    className={`mode-btn ${filterMode === 'union' ? 'active' : ''}`}
-                    onClick={() => setFilterMode('union')}
-                    title="包含任意一个选中的分类"
-                  >任一</button>
-                  <button
-                    className={`mode-btn ${filterMode === 'intersection' ? 'active' : ''}`}
-                    onClick={() => setFilterMode('intersection')}
-                    title="同时包含所有选中的分类"
-                  >全部</button>
-                </div>
-                <div className="category-list">
-                  {categories.map(cat => {
-                    const count = categoryCounts.get(cat.id) || 0;
-                    const isSelected = selectedCategoryIds.has(cat.id);
-                    return (
-                      <div key={cat.id} className="category-chip-row">
-                        <button
-                          className={`category-chip ${isSelected ? 'selected' : ''}`}
-                          style={{ '--chip-color': cat.color || '#6366f1' } as React.CSSProperties}
-                          onClick={() => toggleCategoryFilter(cat.id)}
-                          title={cat.description || cat.name}
-                        >
-                          <span className="chip-dot" />
-                          <span className="chip-name">{cat.name}</span>
-                          {count > 0 && <span className="chip-count">{count}</span>}
-                        </button>
-                        <button
-                          className="chip-edit-btn"
-                          onClick={() => openEditCategory(cat)}
-                          title="编辑分类"
-                        >✎</button>
-                      </div>
-                    );
-                  })}
-                  {categories.length === 0 && (
-                    <p className="empty-hint">暂无分类，点击 + 添加</p>
-                  )}
-                </div>
-                {selectedCategoryIds.size > 0 && (
-                  <div className="sidebar-filter-footer">
-                    <span className="filter-active-label">已选 {selectedCategoryIds.size} 个</span>
-                    <button
-                      className="clear-filter-btn"
-                      onClick={() => setSelectedCategoryIds(new Set())}
-                    >清除</button>
-                  </div>
-                )}
-              </>
+            <div className="cat-filter-trigger-area">
+              <button
+                className={`cat-filter-trigger-btn ${selectedCategoryIds.size > 0 ? 'has-selection' : ''}`}
+                onClick={() => { setShowCategoryFilterModal(true); setCategorySearchQuery(''); }}
+              >
+                {selectedCategoryIds.size === 0
+                  ? <span className="cft-placeholder">点击选择分类…</span>
+                  : <span className="cft-tags">
+                      {Array.from(selectedCategoryIds).slice(0, 3).map(id => {
+                        const cat = categories.find(c => c.id === id);
+                        if (!cat) return null;
+                        return (
+                          <span key={id} className="cft-tag" style={{ '--chip-color': cat.color || '#6366f1' } as React.CSSProperties}>
+                            <span className="cft-tag-dot" />
+                            {cat.name}
+                          </span>
+                        );
+                      })}
+                      {selectedCategoryIds.size > 3 && <span className="cft-more">+{selectedCategoryIds.size - 3}</span>}
+                    </span>
+                }
+                <span className="cft-icon">⊞</span>
+              </button>
+              {selectedCategoryIds.size > 0 && (
+                <button className="cft-clear-btn" onClick={() => setSelectedCategoryIds(new Set())} title="清除筛选">✕</button>
+              )}
+            </div>
+            {selectedCategoryIds.size > 0 && (
+              <div className="cat-filter-mode-row">
+                <button
+                  className={`mode-btn ${filterMode === 'union' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('union')}
+                  title="包含任意一个选中的分类"
+                >任一</button>
+                <button
+                  className={`mode-btn ${filterMode === 'intersection' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('intersection')}
+                  title="同时包含所有选中的分类"
+                >全部</button>
+              </div>
             )}
           </div>
 
@@ -1277,6 +1399,11 @@ ${chainHtmlBlocks}
                           title="文档记录"
                           onClick={() => openDocumentCenter(stock)}
                         >📄</button>
+                        <button
+                          className="action-btn earnings"
+                          title="财报分析"
+                          onClick={() => openEarningsCenter(stock)}
+                        >📊</button>
                         <button
                           className="action-btn danger"
                           title="删除"
@@ -1469,6 +1596,92 @@ ${chainHtmlBlocks}
               }}>取消</button>
               {addStockError && <span style={{ color: 'var(--danger, #e74c3c)', fontSize: 13 }}>{addStockError}</span>}
               <button className="confirm-btn" onClick={handleAddStock}>添加</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Filter Modal */}
+      {showCategoryFilterModal && (
+        <div className="modal-overlay" onClick={() => setShowCategoryFilterModal(false)}>
+          <div className="glass-modal cat-filter-modal" onClick={e => e.stopPropagation()}>
+            <div className="cat-filter-modal-header">
+              <span className="cat-filter-modal-title">分类筛选</span>
+              <div className="cat-filter-modal-modes">
+                <button
+                  className={`mode-btn ${filterMode === 'union' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('union')}
+                  title="包含任意一个选中的分类"
+                >任一</button>
+                <button
+                  className={`mode-btn ${filterMode === 'intersection' ? 'active' : ''}`}
+                  onClick={() => setFilterMode('intersection')}
+                  title="同时包含所有选中的分类"
+                >全部</button>
+              </div>
+              <button className="cat-filter-modal-close" onClick={() => setShowCategoryFilterModal(false)}>✕</button>
+            </div>
+            <div className="cat-filter-modal-search">
+              <input
+                type="text"
+                className="cat-filter-search-input"
+                placeholder="搜索分类…"
+                value={categorySearchQuery}
+                onChange={e => setCategorySearchQuery(e.target.value)}
+                autoFocus
+              />
+              {categorySearchQuery && (
+                <button className="cat-filter-search-clear" onClick={() => setCategorySearchQuery('')}>✕</button>
+              )}
+            </div>
+            <div className="cat-filter-modal-list">
+              {categories
+                .filter(cat => cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase()) || (cat.description || '').toLowerCase().includes(categorySearchQuery.toLowerCase()))
+                .map(cat => {
+                  const count = categoryCounts.get(cat.id) || 0;
+                  const isSelected = selectedCategoryIds.has(cat.id);
+                  return (
+                    <div key={cat.id} className="cat-filter-modal-row">
+                      <button
+                        className={`category-chip ${isSelected ? 'selected' : ''}`}
+                        style={{ '--chip-color': cat.color || '#6366f1' } as React.CSSProperties}
+                        onClick={() => toggleCategoryFilter(cat.id)}
+                        title={cat.description || cat.name}
+                      >
+                        <span className="chip-dot" />
+                        <span className="chip-name">{cat.name}</span>
+                        {count > 0 && <span className="chip-count">{count}</span>}
+                      </button>
+                      <div className="cat-filter-row-actions">
+                        <button
+                          className="cat-row-action-btn edit"
+                          onClick={() => { setShowCategoryFilterModal(false); openEditCategory(cat); }}
+                          title="编辑分类"
+                        >✎</button>
+                        <button
+                          className="cat-row-action-btn delete"
+                          onClick={() => { setShowCategoryFilterModal(false); setPendingDeleteCategory(cat); }}
+                          title="删除分类"
+                        >🗑</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              {categories.filter(cat => cat.name.toLowerCase().includes(categorySearchQuery.toLowerCase()) || (cat.description || '').toLowerCase().includes(categorySearchQuery.toLowerCase())).length === 0 && (
+                <p className="empty-hint" style={{ padding: '16px' }}>无匹配分类</p>
+              )}
+            </div>
+            <div className="cat-filter-modal-footer">
+              {selectedCategoryIds.size > 0
+                ? <span className="filter-active-label">已选 {selectedCategoryIds.size} 个</span>
+                : <span className="filter-active-label">共 {categories.length} 个分类</span>
+              }
+              <div style={{ display: 'flex', gap: 8 }}>
+                {selectedCategoryIds.size > 0 && (
+                  <button className="clear-filter-btn" onClick={() => setSelectedCategoryIds(new Set())}>清除</button>
+                )}
+                <button className="confirm-btn" onClick={() => setShowCategoryFilterModal(false)}>完成</button>
+              </div>
             </div>
           </div>
         </div>
@@ -2228,6 +2441,236 @@ ${chainHtmlBlocks}
                       onChange={v => {
                         editDocContentRef.current = v;
                         setEditDocContent(v);
+                      }}
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* Earnings Report Modal */}
+      {earningsStock && (
+        <div className="modal-overlay" onClick={() => !savingEarnings && setEarningsStock(null)}>
+          <div className="glass-modal document-modal" onClick={e => e.stopPropagation()}>
+
+            {/* ---- List View ---- */}
+            {earningsViewMode === 'list' && (
+              <>
+                <div className="doc-modal-header">
+                  <div className="doc-modal-title-row">
+                    <h2>{earningsStock.code} {earningsStock.name}</h2>
+                    <span className="doc-modal-subtitle">财报分析</span>
+                  </div>
+                  <button
+                    className="doc-new-btn"
+                    onClick={openEarningsCompose}
+                    disabled={savingEarnings}
+                  >+ 新建财报记录</button>
+                </div>
+
+                <div className="doc-list-scroll">
+                  {earningsLoading ? (
+                    <div className="timeline-empty">加载中...</div>
+                  ) : earningsReports.length === 0 ? (
+                    <div className="doc-empty-state">
+                      <div className="doc-empty-icon">📊</div>
+                      <p>还没有财报记录</p>
+                      <p className="doc-empty-sub">点击「新建财报记录」开始整理财报分析</p>
+                    </div>
+                  ) : (
+                    <div className="doc-list">
+                      {earningsReports.map(report => {
+                        const resultLabel = report.result === 'BEAT' ? '超预期' : report.result === 'MISS' ? '低预期' : report.result === 'IN_LINE' ? '符合预期' : null;
+                        const resultClass = report.result === 'BEAT' ? 'earnings-beat' : report.result === 'MISS' ? 'earnings-miss' : report.result === 'IN_LINE' ? 'earnings-inline' : '';
+                        const cleanContent = report.content
+                          ? (report.content.trimStart().startsWith('<')
+                            ? report.content.replace(/<[^>]*>/g, '')
+                            : report.content.replace(/[#*`>\-_~\[\]()]/g, ''))
+                          : '';
+                        const preview = cleanContent.trim().slice(0, 120);
+                        const dt = new Date(report.createdAt);
+                        return (
+                          <article
+                            key={report.id}
+                            className="doc-card"
+                            onClick={() => { setSelectedEarnings(report); setEarningsViewMode('read'); }}
+                          >
+                            <div className="doc-card-date">
+                              <span className="doc-card-day">{dt.getDate()}</span>
+                              <span className="doc-card-month">{dt.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short' })}</span>
+                            </div>
+                            <div className="doc-card-body">
+                              <div className="doc-card-title-row">
+                                <h3 className="doc-card-title">{report.title}</h3>
+                                {resultLabel && <span className={`earnings-result-badge ${resultClass}`}>{resultLabel}</span>}
+                              </div>
+                              <p className="doc-card-preview">{preview}{cleanContent.length > 120 ? '…' : ''}</p>
+                              <div className="doc-card-meta">
+                                {report.fiscalPeriod && <span>{report.fiscalPeriod}</span>}
+                                {report.reportDate && <span>发布：{report.reportDate}</span>}
+                              </div>
+                            </div>
+                            <span className="doc-card-arrow">›</span>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                <div className="modal-actions sticky-actions">
+                  <button className="cancel-btn" onClick={() => setEarningsStock(null)}>关闭</button>
+                </div>
+              </>
+            )}
+
+            {/* ---- Read View ---- */}
+            {earningsViewMode === 'read' && selectedEarnings && (
+              <>
+                <div className="doc-modal-header">
+                  <button className="doc-back-btn" onClick={() => setEarningsViewMode('list')}>‹ 返回列表</button>
+                  <div className="doc-read-actions">
+                    <button className="doc-action-edit" onClick={() => openEarningsEdit(selectedEarnings)}>编辑</button>
+                    <button className="doc-action-delete" onClick={() => setPendingDeleteEarnings(selectedEarnings)}>删除</button>
+                  </div>
+                </div>
+
+                <div className="doc-read-scroll">
+                  <div className="doc-read-meta">
+                    <time>{new Date(selectedEarnings.createdAt).toLocaleString('zh-CN', { hour12: false })}</time>
+                    {selectedEarnings.updatedAt !== selectedEarnings.createdAt && (
+                      <span className="doc-read-edited">已编辑 · {new Date(selectedEarnings.updatedAt).toLocaleString('zh-CN', { hour12: false })}</span>
+                    )}
+                  </div>
+                  <div className="earnings-read-header">
+                    <h1 className="doc-read-title">{selectedEarnings.title}</h1>
+                    <div className="earnings-read-meta-row">
+                      {selectedEarnings.result && (
+                        <span className={`earnings-result-badge large ${selectedEarnings.result === 'BEAT' ? 'earnings-beat' : selectedEarnings.result === 'MISS' ? 'earnings-miss' : 'earnings-inline'}`}>
+                          {selectedEarnings.result === 'BEAT' ? '超预期 Beat' : selectedEarnings.result === 'MISS' ? '低预期 Miss' : '符合预期 In-line'}
+                        </span>
+                      )}
+                      {selectedEarnings.fiscalPeriod && <span className="earnings-meta-chip">{selectedEarnings.fiscalPeriod}</span>}
+                      {selectedEarnings.reportDate && <span className="earnings-meta-chip">📅 {selectedEarnings.reportDate}</span>}
+                    </div>
+                  </div>
+                  {selectedEarnings.content?.trim() ? (
+                    selectedEarnings.content.trimStart().startsWith('<') ? (
+                      <DocEditor value={selectedEarnings.content} onChange={() => {}} readonly />
+                    ) : (
+                      <div className="doc-markdown-body">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{selectedEarnings.content}</ReactMarkdown>
+                      </div>
+                    )
+                  ) : (
+                    <div className="profile-section-empty" style={{ marginTop: 24 }}>
+                      <span>暂无详细记录</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="modal-actions sticky-actions">
+                  <button className="cancel-btn" onClick={() => setEarningsViewMode('list')}>返回列表</button>
+                </div>
+
+                {pendingDeleteEarnings && (
+                  <div className="modal-overlay" onClick={() => !savingEarnings && setPendingDeleteEarnings(null)}>
+                    <div className="glass-modal delete-confirm-modal" onClick={e => e.stopPropagation()}>
+                      <h2>确认删除财报记录</h2>
+                      <div className="delete-confirm-body">
+                        <p className="delete-confirm-text">将要删除：</p>
+                        <p className="delete-confirm-target">《{pendingDeleteEarnings.title}》</p>
+                        <p className="delete-confirm-sub">此操作不可撤销。</p>
+                      </div>
+                      <div className="modal-actions">
+                        <button className="cancel-btn" onClick={() => setPendingDeleteEarnings(null)} disabled={savingEarnings}>取消</button>
+                        <button className="confirm-btn danger" onClick={handleDeleteEarnings} disabled={savingEarnings}>
+                          {savingEarnings ? '删除中...' : '确认删除'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ---- Compose / Edit View ---- */}
+            {(earningsViewMode === 'compose' || earningsViewMode === 'edit') && (
+              <>
+                <div className="rp-modal-header">
+                  <div className="rp-modal-header-left doc-compose-edit-meta">
+                    <div className="doc-compose-header-top">
+                      <button className="doc-back-btn" onClick={() => {
+                        if (earningsViewMode === 'edit') setEarningsViewMode('read');
+                        else setEarningsViewMode('list');
+                      }}>‹ {earningsViewMode === 'edit' ? '返回阅读' : '返回列表'}</button>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        {earningsViewMode === 'edit' ? '编辑财报记录' : '新建财报记录'}
+                      </span>
+                    </div>
+                    <div className="doc-compose-title-row">
+                      <input
+                        className="rp-modal-title-input"
+                        type="text"
+                        placeholder="财报标题，例如：2026Q1 业绩超预期"
+                        value={earningsFormTitle}
+                        onChange={e => { setEarningsFormTitle(e.target.value); if (earningsSaveError) setEarningsSaveError(''); }}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="earnings-form-meta-row">
+                      <input
+                        className="earnings-meta-input"
+                        type="text"
+                        placeholder="财报期，如 2026Q1"
+                        value={earningsFormPeriod}
+                        onChange={e => setEarningsFormPeriod(e.target.value)}
+                      />
+                      <select
+                        className="earnings-meta-select"
+                        value={earningsFormResult}
+                        onChange={e => setEarningsFormResult(e.target.value as 'BEAT' | 'MISS' | 'IN_LINE' | '')}
+                      >
+                        <option value="">-- 结果 --</option>
+                        <option value="BEAT">超预期 Beat</option>
+                        <option value="IN_LINE">符合预期 In-line</option>
+                        <option value="MISS">低预期 Miss</option>
+                      </select>
+                      <input
+                        className="earnings-meta-input"
+                        type="date"
+                        title="财报发布日期"
+                        value={earningsFormDate}
+                        onChange={e => setEarningsFormDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="rp-modal-header-right">
+                    {earningsSaveError && <span className="doc-save-error" style={{ flex: 'unset' }}>{earningsSaveError}</span>}
+                    <button className="cancel-btn" onClick={() => {
+                      if (earningsViewMode === 'edit') setEarningsViewMode('read');
+                      else setEarningsViewMode('list');
+                    }} disabled={savingEarnings}>取消</button>
+                    <button
+                      className="confirm-btn"
+                      onClick={earningsViewMode === 'edit' ? handleUpdateEarnings : handleAddEarnings}
+                      disabled={savingEarnings}
+                    >{savingEarnings ? '保存中...' : '保存财报'}</button>
+                  </div>
+                </div>
+
+                <div className="rp-modal-body">
+                  <div className="rp-modal-editor-wrap">
+                    <DocEditor
+                      ref={earningsEditorRef}
+                      value={earningsFormContent}
+                      onChange={v => {
+                        earningsFormContentRef.current = v;
+                        setEarningsFormContent(v);
                       }}
                     />
                   </div>
