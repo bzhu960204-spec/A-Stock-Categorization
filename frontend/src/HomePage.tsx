@@ -39,6 +39,13 @@ const MODULES: Module[] = [
     description: '记录不同技术与板块的发展周期与趋势时间线',
     icon: '⏱',
   },
+  {
+    id: 'ideas',
+    label: '赚钱 Idea',
+    labelEn: 'IDEA VAULT',
+    description: '记录赚钱想法与投资逻辑，支持分类、加星与全文搜索',
+    icon: '💡',
+  },
 ];
 
 interface HomePageProps {

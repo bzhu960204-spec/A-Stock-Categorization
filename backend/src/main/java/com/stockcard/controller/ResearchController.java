@@ -76,6 +76,7 @@ public class ResearchController {
         private String content;
         private String source;
         private String reportDate;
+        private String category;
         private Integer rating;
     }
 
@@ -94,6 +95,7 @@ public class ResearchController {
         private String content;
         private String source;
         private String reportDate;
+        private String category;
         private int rating;
         private String createdAt;
         private String updatedAt;
@@ -107,6 +109,7 @@ public class ResearchController {
             dto.content = r.getContent();
             dto.source = r.getSource();
             dto.reportDate = r.getReportDate();
+            dto.category = r.getCategory();
             dto.rating = r.getRating();
             dto.createdAt = r.getCreatedAt() != null ? r.getCreatedAt().toString() : null;
             dto.updatedAt = r.getUpdatedAt() != null ? r.getUpdatedAt().toString() : null;
@@ -137,6 +140,7 @@ public class ResearchController {
                     report.setContent(payload.getContent());
                     report.setSource(payload.getSource());
                     report.setReportDate(payload.getReportDate());
+                    report.setCategory(payload.getCategory());
                     if (payload.getRating() != null) report.setRating(Math.max(0, Math.min(5, payload.getRating())));
                     return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
                 })
@@ -157,6 +161,7 @@ public class ResearchController {
                     report.setContent(payload.getContent());
                     report.setSource(payload.getSource());
                     report.setReportDate(payload.getReportDate());
+                    report.setCategory(payload.getCategory());
                     if (payload.getRating() != null) report.setRating(Math.max(0, Math.min(5, payload.getRating())));
                     return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
                 })

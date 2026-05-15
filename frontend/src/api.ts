@@ -126,6 +126,7 @@ export interface SectorReport {
   content: string;
   source?: string;
   reportDate?: string;
+  category?: string;
   rating: number;
   createdAt: string;
   updatedAt: string;
@@ -140,9 +141,9 @@ export const getSectorReports = (sectorId: number) =>
   API.get<SectorReport[]>(`/research/sectors/${sectorId}/reports`);
 export const searchSectorReports = (keyword: string) =>
   API.get<SectorReport[]>('/research/reports/search', { params: { keyword } });
-export const createSectorReport = (sectorId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string }) =>
+export const createSectorReport = (sectorId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; category?: string }) =>
   API.post<SectorReport>(`/research/sectors/${sectorId}/reports`, payload);
-export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; rating?: number }) =>
+export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; category?: string; rating?: number }) =>
   API.put<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}`, payload);
 export const updateSectorReportRating = (sectorId: number, reportId: number, rating: number) =>
   API.patch<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}/rating`, { rating });
@@ -247,6 +248,41 @@ export const updateTechCyclePhase = (cycleId: number, phaseId: number, p: Omit<T
   API.put<TechCyclePhase>(`/tech-cycles/${cycleId}/phases/${phaseId}`, p);
 export const deleteTechCyclePhase = (cycleId: number, phaseId: number) =>
   API.delete(`/tech-cycles/${cycleId}/phases/${phaseId}`);
+
+// ===== Ideas (赚钱Idea) APIs =====
+export interface IdeaCategory {
+  id: number;
+  name: string;
+}
+
+export interface Idea {
+  id: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  subCategory?: string;
+  title: string;
+  content: string;
+  rating: number; // 0-5
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getIdeaCategories = () => API.get<IdeaCategory[]>('/ideas/categories');
+export const createIdeaCategory = (payload: { name: string }) => API.post<IdeaCategory>('/ideas/categories', payload);
+export const updateIdeaCategory = (id: number, payload: { name: string }) => API.put<IdeaCategory>(`/ideas/categories/${id}`, payload);
+export const deleteIdeaCategory = (id: number) => API.delete(`/ideas/categories/${id}`);
+
+export const getIdeas = (params?: { categoryId?: number }) =>
+  API.get<Idea[]>('/ideas', { params });
+export const searchIdeas = (keyword: string) =>
+  API.get<Idea[]>('/ideas/search', { params: { keyword } });
+export const createIdea = (payload: { categoryId?: number | null; subCategory?: string; title: string; content?: string; rating?: number }) =>
+  API.post<Idea>('/ideas', payload);
+export const updateIdea = (id: number, payload: { categoryId?: number | null; subCategory?: string; title: string; content?: string; rating?: number }) =>
+  API.put<Idea>(`/ideas/${id}`, payload);
+export const updateIdeaRating = (id: number, rating: number) =>
+  API.patch<Idea>(`/ideas/${id}/rating`, { rating });
+export const deleteIdea = (id: number) => API.delete(`/ideas/${id}`);
 
 // ===== Config APIs =====
 export interface AppConfig {

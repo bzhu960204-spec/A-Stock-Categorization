@@ -3,39 +3,37 @@ package com.stockcard.entity;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "sector_reports")
+@Table(name = "ideas")
 @Data
 @NoArgsConstructor
-public class SectorReport {
+public class Idea {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "sector_id", nullable = false)
-    private Sector sector;
+    @ManyToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "category_id")
+    private IdeaCategory category;
 
-    @Column(nullable = false)
-    private String title; // 报告标题
+    @Column(nullable = false, length = 200)
+    private String title;
 
+    /** 子分类标签（自由文本，隶属于文件夹分类之下） */
+    @Column(length = 100)
+    private String subCategory;
+
+    /** Investment thesis / notes in rich-text (HTML from Tiptap) */
     @Lob
     @Column(columnDefinition = "CLOB")
-    private String content; // 报告内容（Markdown）
+    private String content;
 
-    @Column
-    private String source; // 来源，如 "中信证券"
-
-    @Column
-    private String reportDate; // 报告日期，如 "2026-04-01"
-
-    @Column(length = 100)
-    private String category; // 自由分类标签
-
+    /** 评星 0-5，0 表示未评星 */
     @Column(nullable = false, columnDefinition = "integer default 0")
-    private int rating = 0; // 评星 0-5
+    private int rating = 0;
 
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;

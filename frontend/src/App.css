@@ -1042,6 +1042,34 @@ body {
   color: #f59e0b;
 }
 
+/* Idea module — single star toggle button */
+.idea-star-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--text-muted, #888);
+  transition: color 0.15s, transform 0.1s;
+  user-select: none;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.idea-star-btn.starred {
+  color: #f5a623;
+}
+
+.idea-star-btn:hover {
+  color: #f5a623;
+  transform: scale(1.2);
+}
+
+/* Idea module sidebar — always show edit/delete buttons */
+.idea-sidebar .chip-edit-btn {
+  opacity: 1;
+}
+
 /* Star filter in sidebar */
 .star-filter-group {
   display: flex;
@@ -1603,6 +1631,19 @@ body {
   background: var(--accent-dim);
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Research module: category pills strip between filter bar and list */
+.rp-list-wrap .doc-category-pills {
+  padding: 8px 24px 6px;
+  gap: 6px;
+  border-bottom: 1px solid var(--border-faint);
+  background: var(--panel-bg-2);
+  flex-shrink: 0;
+}
+.rp-list-wrap .doc-category-pill {
+  padding: 3px 12px;
+  font-size: 0.74rem;
 }
 /* Search row */
 .doc-search-bar {

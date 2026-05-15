@@ -43,7 +43,11 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const [editTitle, setEditTitle] = useState('');
   const [editSource, setEditSource] = useState('');
   const [editReportDate, setEditReportDate] = useState('');
+  const [editCategory, setEditCategory] = useState('');
   const [editContent, setEditContent] = useState('');
+
+  // Category filter for local reports
+  const [categoryFilter, setCategoryFilter] = useState('全部');
   const editContentRef = useRef('');
   const [savingReport, setSavingReport] = useState(false);
   const [saveError, setSaveError] = useState('');
@@ -88,6 +92,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     }
     setSearch('');
     setStarFilter(0);
+    setCategoryFilter('全部');
     setGlobalResults([]);
   }, [selectedSector, loadReports]);
 
@@ -108,8 +113,14 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     return () => clearTimeout(timer);
   }, [search, searchScope]);
 
+  const reportCategories = useMemo(() =>
+    ['全部', ...Array.from(new Set(reports.map(r => r.category).filter((c): c is string => !!c)))],
+    [reports]
+  );
+
   const filteredReports = useMemo(() => {
     let list = reports;
+    if (categoryFilter !== '全部') list = list.filter(r => (r.category || '') === categoryFilter);
     if (starFilter > 0) list = list.filter(r => (r.rating ?? 0) >= starFilter);
     if (search.trim()) {
       const kw = search.trim().toLowerCase();
@@ -120,7 +131,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
       );
     }
     return list;
-  }, [reports, search, starFilter]);
+  }, [reports, search, starFilter, categoryFilter]);
 
   const handleAddSector = async () => {
     if (!newSectorName.trim()) return;
@@ -170,6 +181,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     setEditTitle('');
     setEditSource('');
     setEditReportDate('');
+    setEditCategory(categoryFilter !== '全部' ? categoryFilter : '');
     setEditContent('');
     editContentRef.current = '';
     setSaveError('');
@@ -181,6 +193,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     setEditTitle(report.title);
     setEditSource(report.source || '');
     setEditReportDate(report.reportDate || '');
+    setEditCategory(report.category || '');
     setEditContent(report.content || '');
     editContentRef.current = report.content || '';
     setSaveError('');
@@ -198,6 +211,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
         content: editContentRef.current,
         source: editSource.trim() || undefined,
         reportDate: editReportDate.trim() || undefined,
+        category: editCategory.trim() || undefined,
       };
       let saved: SectorReport;
       if (!modalReport) {
@@ -440,6 +454,21 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
               )}
             </div>
 
+            {/* Category pills — local mode only */}
+            {searchScope === 'local' && selectedSector && reportCategories.length > 1 && (
+              <div className="doc-category-pills">
+                {reportCategories.map(cat => (
+                  <button
+                    key={cat}
+                    className={`doc-category-pill${categoryFilter === cat ? ' active' : ''}`}
+                    onClick={() => setCategoryFilter(cat)}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {/* Results */}
             {searchScope === 'global' ? (
               !search.trim() ? (
@@ -508,7 +537,10 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                   {filteredReports.map(report => (
                     <div key={report.id} className="rp-row" onClick={() => openReadModal(report)}>
                       <div className="rp-row-main">
-                        <span className="rp-row-title">{report.title}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          {report.category && <span className="rp-global-sector-tag">{report.category}</span>}
+                          <span className="rp-row-title">{report.title}</span>
+                        </div>
                         <span className="rp-row-preview">
                           {report.content ? stripHtml(report.content) : '（无内容）'}
                         </span>
@@ -571,6 +603,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                       </div>
                       {modalReport?.source && <span className="research-meta-tag">{modalReport.source}</span>}
                       {modalReport?.reportDate && <span className="research-meta-tag">{modalReport.reportDate}</span>}
+                      {modalReport?.category && <span className="research-meta-tag">{modalReport.category}</span>}
                       {modalReport?.createdAt && (
                         <span className="research-meta-date">
                           {new Date(modalReport.createdAt).toLocaleDateString('zh-CN')}
@@ -607,6 +640,18 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
                         value={editReportDate}
                         onChange={e => setEditReportDate(e.target.value)}
                       />
+                      <input
+                        className="rp-modal-meta-input"
+                        placeholder="分类（如：宏观 / 科技 / 消费…）"
+                        list="rp-category-presets"
+                        value={editCategory}
+                        onChange={e => setEditCategory(e.target.value)}
+                      />
+                      <datalist id="rp-category-presets">
+                        {reportCategories.filter(c => c !== '全部').map(c => (
+                          <option key={c} value={c} />
+                        ))}
+                      </datalist>
                     </div>
                   </div>
                   <div className="rp-modal-header-right">

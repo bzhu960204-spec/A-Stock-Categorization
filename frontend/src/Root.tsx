@@ -4,8 +4,9 @@ import HomePage from './HomePage';
 import ResearchModule from './ResearchModule';
 import CalendarModule from './CalendarModule';
 import TechCycleModule from './TechCycleModule';
+import IdeaModule from './IdeaModule';
 
-export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle';
+export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle' | 'ideas';
 
 export default function Root() {
   const [module, setModule] = useState<ModuleId>(() => {
@@ -28,6 +29,9 @@ export default function Root() {
   }
   if (module === 'techcycle') {
     return <TechCycleModule onGoHome={() => setModule('home')} />;
+  }
+  if (module === 'ideas') {
+    return <IdeaModule onGoHome={() => setModule('home')} />;
   }
   return <HomePage onSelectModule={setModule} />;
 }
