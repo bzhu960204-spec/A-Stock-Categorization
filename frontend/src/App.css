@@ -3724,72 +3724,124 @@ body {
   align-items: center;
   justify-content: center;
   min-height: calc(100vh - 44px);
-  gap: 32px;
   padding: 40px 20px;
 }
 
-.home-subtitle {
+/* ── Nav container ── */
+.home-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  width: 100%;
+  max-width: 660px;
+}
+
+/* ── Group ── */
+.home-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.home-nav-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.home-nav-group-label-en {
   font-family: 'JetBrains Mono', monospace;
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.home-nav-group-label {
+  font-size: 0.72rem;
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
-.home-module-grid {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-  justify-content: center;
+.home-nav-group-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border-mid);
 }
 
-.home-module-card {
+/* ── Rows ── */
+.home-nav-rows {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  width: 220px;
-  padding: 32px 24px;
-  background: var(--panel-bg);
   border: 1px solid var(--border-mid);
-  border-radius: 4px;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.home-nav-row {
+  display: grid;
+  grid-template-columns: 28px 110px 130px 1fr 20px;
+  align-items: center;
+  gap: 0 12px;
+  padding: 13px 16px;
+  background: var(--panel-bg);
+  border: none;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
-  transition: all 0.15s;
-  text-align: center;
+  text-align: left;
   color: var(--text-primary);
+  transition: background 0.12s, border-color 0.12s;
 }
-.home-module-card:hover {
-  border-color: var(--accent);
-  background: var(--accent-dim);
-  transform: translateY(-2px);
+.home-nav-row:last-child { border-bottom: none; }
+.home-nav-row:hover {
+  background: var(--hover-bg);
+  border-color: var(--border-mid);
 }
+.home-nav-row:hover .home-nav-arrow { color: var(--accent); }
 
-.home-module-icon {
-  font-size: 2rem;
+.home-nav-icon {
+  font-size: 1.1rem;
   line-height: 1;
+  text-align: center;
 }
 
-.home-module-label-en {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-.home-module-label {
-  font-size: 1.05rem;
+.home-nav-label {
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
-.home-module-desc {
-  font-size: 0.76rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
+.home-nav-label-en {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  white-space: nowrap;
 }
+
+.home-nav-desc {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.home-nav-arrow {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: right;
+  transition: color 0.12s;
+}
+
+/* keep old class names so nothing breaks if referenced elsewhere */
+.home-subtitle { display: none; }
+.home-module-grid { display: none; }
+.home-module-card { display: none; }
 
 /* ===== Home Settings Panel ===== */
 .home-settings-panel {

@@ -10,41 +10,72 @@ interface Module {
   icon: string;
 }
 
-const MODULES: Module[] = [
+interface ModuleGroup {
+  groupLabel: string;
+  groupLabelEn: string;
+  modules: Module[];
+}
+
+const MODULE_GROUPS: ModuleGroup[] = [
   {
-    id: 'stocks',
-    label: '个股信息',
-    labelEn: 'STOCK INFO',
-    description: '追踪个股基本情况、竞争分析、研究文档与操作时间轴',
-    icon: '📈',
+    groupLabel: '研究工具',
+    groupLabelEn: 'RESEARCH',
+    modules: [
+      {
+        id: 'stocks',
+        label: '个股信息',
+        labelEn: 'STOCK INFO',
+        description: '追踪个股基本情况、竞争分析、研究文档与操作时间轴',
+        icon: '📈',
+      },
+      {
+        id: 'research',
+        label: '行业研报',
+        labelEn: 'SECTOR RESEARCH',
+        description: '按行业分类整理研究报告，支持富文本编辑',
+        icon: '📋',
+      },
+      {
+        id: 'techcycle',
+        label: '技术周期',
+        labelEn: 'TECH CYCLE',
+        description: '记录不同技术与板块的发展周期与趋势时间线',
+        icon: '⏱',
+      },
+    ],
   },
   {
-    id: 'research',
-    label: '行业研报',
-    labelEn: 'SECTOR RESEARCH',
-    description: '按行业分类整理研究报告，支持 Markdown 富文本编辑',
-    icon: '📋',
+    groupLabel: '记录工具',
+    groupLabelEn: 'JOURNAL',
+    modules: [
+      {
+        id: 'ideas',
+        label: '赚钱 Idea',
+        labelEn: 'IDEA VAULT',
+        description: '记录赚钱想法与投资逻辑，支持分类、加星与全文搜索',
+        icon: '💡',
+      },
+      {
+        id: 'trades',
+        label: '交易记录',
+        labelEn: 'TRADE LOG',
+        description: '记录成功失败的交易与经验，错过的机会，用于复盘总结',
+        icon: '📒',
+      },
+    ],
   },
   {
-    id: 'calendar',
-    label: '市场日历',
-    labelEn: 'MARKET CALENDAR',
-    description: '记录影响金融市场的重要事件，按月浏览与管理',
-    icon: '🗓',
-  },
-  {
-    id: 'techcycle',
-    label: '技术周期',
-    labelEn: 'TECH CYCLE',
-    description: '记录不同技术与板块的发展周期与趋势时间线',
-    icon: '⏱',
-  },
-  {
-    id: 'ideas',
-    label: '赚钱 Idea',
-    labelEn: 'IDEA VAULT',
-    description: '记录赚钱想法与投资逻辑，支持分类、加星与全文搜索',
-    icon: '💡',
+    groupLabel: '时间线',
+    groupLabelEn: 'TIMELINE',
+    modules: [
+      {
+        id: 'calendar',
+        label: '市场日历',
+        labelEn: 'MARKET CALENDAR',
+        description: '记录影响金融市场的重要事件，按月浏览与管理',
+        icon: '🗓',
+      },
+    ],
   },
 ];
 
@@ -149,19 +180,30 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
       )}
 
       <main className="home-main">
-        <div className="home-subtitle">选择模块</div>
-        <div className="home-module-grid">
-          {MODULES.map(mod => (
-            <button
-              key={mod.id}
-              className="home-module-card"
-              onClick={() => onSelectModule(mod.id)}
-            >
-              <span className="home-module-icon">{mod.icon}</span>
-              <span className="home-module-label-en">{mod.labelEn}</span>
-              <span className="home-module-label">{mod.label}</span>
-              <span className="home-module-desc">{mod.description}</span>
-            </button>
+        <div className="home-nav">
+          {MODULE_GROUPS.map(group => (
+            <div key={group.groupLabelEn} className="home-nav-group">
+              <div className="home-nav-group-header">
+                <span className="home-nav-group-label-en">{group.groupLabelEn}</span>
+                <span className="home-nav-group-label">{group.groupLabel}</span>
+                <div className="home-nav-group-line" />
+              </div>
+              <div className="home-nav-rows">
+                {group.modules.map(mod => (
+                  <button
+                    key={mod.id}
+                    className="home-nav-row"
+                    onClick={() => onSelectModule(mod.id)}
+                  >
+                    <span className="home-nav-icon">{mod.icon}</span>
+                    <span className="home-nav-label">{mod.label}</span>
+                    <span className="home-nav-label-en">{mod.labelEn}</span>
+                    <span className="home-nav-desc">{mod.description}</span>
+                    <span className="home-nav-arrow">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </main>

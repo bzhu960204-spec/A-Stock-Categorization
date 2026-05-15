@@ -5,8 +5,9 @@ import ResearchModule from './ResearchModule';
 import CalendarModule from './CalendarModule';
 import TechCycleModule from './TechCycleModule';
 import IdeaModule from './IdeaModule';
+import TradeModule from './TradeModule';
 
-export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle' | 'ideas';
+export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle' | 'ideas' | 'trades';
 
 export default function Root() {
   const [module, setModule] = useState<ModuleId>(() => {
@@ -32,6 +33,9 @@ export default function Root() {
   }
   if (module === 'ideas') {
     return <IdeaModule onGoHome={() => setModule('home')} />;
+  }
+  if (module === 'trades') {
+    return <TradeModule onGoHome={() => setModule('home')} />;
   }
   return <HomePage onSelectModule={setModule} />;
 }

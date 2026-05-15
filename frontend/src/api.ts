@@ -284,6 +284,41 @@ export const updateIdeaRating = (id: number, rating: number) =>
   API.patch<Idea>(`/ideas/${id}/rating`, { rating });
 export const deleteIdea = (id: number) => API.delete(`/ideas/${id}`);
 
+// ===== Trades (交易记录) APIs =====
+export interface TradeCategory {
+  id: number;
+  name: string;
+}
+
+export interface Trade {
+  id: number;
+  categoryId: number | null;
+  categoryName: string | null;
+  subCategory?: string;
+  title: string;
+  content: string;
+  rating: number; // 0-5
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getTradeCategories = () => API.get<TradeCategory[]>('/trades/categories');
+export const createTradeCategory = (payload: { name: string }) => API.post<TradeCategory>('/trades/categories', payload);
+export const updateTradeCategory = (id: number, payload: { name: string }) => API.put<TradeCategory>(`/trades/categories/${id}`, payload);
+export const deleteTradeCategory = (id: number) => API.delete(`/trades/categories/${id}`);
+
+export const getTrades = (params?: { categoryId?: number }) =>
+  API.get<Trade[]>('/trades', { params });
+export const searchTrades = (keyword: string) =>
+  API.get<Trade[]>('/trades/search', { params: { keyword } });
+export const createTrade = (payload: { categoryId?: number | null; subCategory?: string; title: string; content?: string; rating?: number }) =>
+  API.post<Trade>('/trades', payload);
+export const updateTrade = (id: number, payload: { categoryId?: number | null; subCategory?: string; title: string; content?: string; rating?: number }) =>
+  API.put<Trade>(`/trades/${id}`, payload);
+export const updateTradeRating = (id: number, rating: number) =>
+  API.patch<Trade>(`/trades/${id}/rating`, { rating });
+export const deleteTrade = (id: number) => API.delete(`/trades/${id}`);
+
 // ===== Config APIs =====
 export interface AppConfig {
   twelvedataApiKey: string;
