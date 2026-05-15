@@ -4127,6 +4127,7 @@ body {
   background: var(--hover-bg);
 }
 .rp-row:hover .rp-row-actions { opacity: 1; }
+.rp-row:hover .rp-row-right .chip-edit-btn { opacity: 1; }
 
 .rp-row-main {
   flex: 1;
