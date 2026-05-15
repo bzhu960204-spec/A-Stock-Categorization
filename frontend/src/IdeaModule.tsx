@@ -60,12 +60,14 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     localStorage.setItem('darkMode', String(darkMode));
   }, [darkMode]);
 
-  // ── ESC closes modal ─────────────────────────────────────────────────────
+  // ── ESC closes modal (blocked in edit mode to prevent data loss) ──────────
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && modalOpen) closeModal(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && modalOpen && modalMode !== 'edit') closeModal();
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [modalOpen]);
+  }, [modalOpen, modalMode]);
 
   // ── Load categories ───────────────────────────────────────────────────────
   const loadCategories = useCallback(async () => {
@@ -514,7 +516,7 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
 
       {/* ── Modal ── */}
       {modalOpen && (
-        <div className="rp-modal-overlay" onClick={closeModal}>
+        <div className="rp-modal-overlay" onClick={() => { if (modalMode !== 'edit') closeModal(); }}>
           <div className="rp-modal" onClick={e => e.stopPropagation()}>
 
             <div className="rp-modal-header">

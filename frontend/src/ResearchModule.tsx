@@ -60,7 +60,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   }, [darkMode]);
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && modalOpen) closeModal(); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && modalOpen && modalMode !== 'edit') closeModal(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [modalOpen]);
@@ -580,7 +580,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
 
       {/* Full-screen modal */}
       {modalOpen && (
-        <div className="rp-modal-overlay" onClick={closeModal}>
+        <div className="rp-modal-overlay" onClick={() => { if (modalMode !== 'edit') closeModal(); }}>
           <div className="rp-modal" onClick={e => e.stopPropagation()}>
 
             <div className="rp-modal-header">

@@ -80,7 +80,7 @@ function EventModal({ initial, onSave, onCancel, title }: EventModalProps) {
   };
 
   return (
-    <div className="cal-modal-overlay" onClick={onCancel}>
+    <div className="cal-modal-overlay" onClick={() => { if (window.confirm('有未保存的内容，确定要放弃并关闭？')) onCancel(); }}>
       <div className="cal-modal" onClick={e => e.stopPropagation()}>
         <div className="cal-modal-header">
           <span>{title}</span>
@@ -164,7 +164,7 @@ function ImportModal({ onImport, onCancel, importing, error }: ImportModalProps)
   };
 
   return (
-    <div className="cal-modal-overlay" onClick={onCancel}>
+    <div className="cal-modal-overlay" onClick={() => { if (window.confirm('有未保存的内容，确定要放弃并关闭？')) onCancel(); }}>
       <div className="cal-modal cal-modal-wide" onClick={e => e.stopPropagation()}>
         <div className="cal-modal-header">
           <span>导入 JSON 事件</span>

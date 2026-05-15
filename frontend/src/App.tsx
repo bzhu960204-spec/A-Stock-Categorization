@@ -1913,7 +1913,13 @@ ${chainHtmlBlocks}
 
       {/* Company Profile Modal */}
       {profileStock && (
-        <div className="modal-overlay" onClick={() => { setProfileStock(null); setShowJsonImport(false); }}>
+        <div className="modal-overlay" onClick={() => {
+          const isEditing = profileMode === 'edit'
+            || docViewMode === 'edit' || docViewMode === 'compose'
+            || docViewMode === 'earnings-edit' || docViewMode === 'earnings-compose';
+          if (isEditing) return;
+          setProfileStock(null); setShowJsonImport(false);
+        }}>
           <div className="glass-modal profile-modal" onClick={e => e.stopPropagation()}>
 
             {/* Header */}
@@ -2279,7 +2285,13 @@ ${chainHtmlBlocks}
 
       {/* Document Modal */}
       {documentStock && (
-        <div className="modal-overlay" onClick={() => !savingDocument && setDocumentStock(null)}>
+        <div className="modal-overlay" onClick={() => {
+          const isEditing = savingDocument
+            || docViewMode === 'edit' || docViewMode === 'compose'
+            || docViewMode === 'earnings-edit' || docViewMode === 'earnings-compose';
+          if (isEditing) return;
+          setDocumentStock(null);
+        }}>
           <div className="glass-modal document-modal" onClick={e => e.stopPropagation()}>
 
             {/* ---- List View ---- */}
