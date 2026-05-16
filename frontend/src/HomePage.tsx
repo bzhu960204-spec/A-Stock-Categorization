@@ -62,6 +62,13 @@ const MODULE_GROUPS: ModuleGroup[] = [
         description: '记录成功失败的交易与经验，错过的机会，用于复盘总结',
         icon: '📒',
       },
+      {
+        id: 'valuation',
+        label: '估值比较',
+        labelEn: 'VALUATION',
+        description: '记录不同公司各时间节点的估值快照（PE/PS/NTM/毛利率等），横向对比分析',
+        icon: '📊',
+      },
     ],
   },
   {

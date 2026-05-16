@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
 import { marked } from 'marked';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
@@ -2002,7 +2003,7 @@ ${chainHtmlBlocks}
                         <div className="profile-section-read">
                           {section.value?.trim() ? (
                             <div className="doc-markdown-body">
-                              <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{section.value}</ReactMarkdown>
+                              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{section.value}</ReactMarkdown>
                             </div>
                           ) : (
                             <div className="profile-section-empty">
@@ -2139,7 +2140,7 @@ ${chainHtmlBlocks}
                   {/* Read view */}
                   {viewingChain && chainFormMode === 'none' && (
                     <div className="chain-item-content chain-read-view">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{autoFenceBoxArt(viewingChain.content)}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{autoFenceBoxArt(viewingChain.content)}</ReactMarkdown>
                     </div>
                   )}
 
@@ -2451,7 +2452,7 @@ ${chainHtmlBlocks}
                     <DocEditor value={selectedDocument.content} onChange={() => {}} readonly />
                   ) : (
                     <div className="doc-markdown-body">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{selectedDocument.content}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{selectedDocument.content}</ReactMarkdown>
                     </div>
                   )}
                 </div>
@@ -2592,7 +2593,7 @@ ${chainHtmlBlocks}
                       <DocEditor value={selectedEarnings.content} onChange={() => {}} readonly />
                     ) : (
                       <div className="doc-markdown-body">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={url => url}>{selectedEarnings.content}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{selectedEarnings.content}</ReactMarkdown>
                       </div>
                     )
                   ) : (

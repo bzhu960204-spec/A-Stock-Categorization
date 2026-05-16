@@ -319,6 +319,38 @@ export const updateTradeRating = (id: number, rating: number) =>
   API.patch<Trade>(`/trades/${id}/rating`, { rating });
 export const deleteTrade = (id: number) => API.delete(`/trades/${id}`);
 
+// ===== Valuation Comparison (估值比较) APIs =====
+export interface ValuationSnapshot {
+  id: number;
+  ticker: string;
+  companyName: string;
+  snapshotDate: string; // "YYYY-MM-DD"
+  pe?: number | null;
+  ps?: number | null;
+  ntmPe?: number | null;
+  ntmPs?: number | null;
+  grossMargin?: number | null;
+  netMargin?: number | null;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ValuationCompany {
+  ticker: string;
+  companyName: string;
+}
+
+export const getValuationSnapshots = (ticker?: string) =>
+  API.get<ValuationSnapshot[]>('/valuations/snapshots', { params: ticker ? { ticker } : undefined });
+export const getValuationCompanies = () =>
+  API.get<ValuationCompany[]>('/valuations/companies');
+export const createValuationSnapshot = (payload: Omit<ValuationSnapshot, 'id' | 'createdAt'>) =>
+  API.post<ValuationSnapshot>('/valuations/snapshots', payload);
+export const updateValuationSnapshot = (id: number, payload: Omit<ValuationSnapshot, 'id' | 'createdAt'>) =>
+  API.put<ValuationSnapshot>(`/valuations/snapshots/${id}`, payload);
+export const deleteValuationSnapshot = (id: number) =>
+  API.delete(`/valuations/snapshots/${id}`);
+
 // ===== Config APIs =====
 export interface AppConfig {
   twelvedataApiKey: string;
