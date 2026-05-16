@@ -355,6 +355,74 @@ public class ImageController {
 
 复制 `DocEditor.tsx` 组件和相关 CSS 到新项目即可。需要后端支持图片上传 API。
 
+---
+
+## 估值快照 — JSON 批量导入格式
+
+点击估值比较页头部的 **「↑ 导入 JSON」** 按钮，粘贴符合以下格式的 JSON，即可批量导入估值快照。
+
+### 格式（数组，支持多条）
+
+```json
+[
+  {
+    "ticker": "AAPL",
+    "companyName": "Apple Inc.",
+    "snapshotDate": "2026-05-16",
+    "pe": 28.5,
+    "ps": 7.2,
+    "ntmPe": 25.0,
+    "ntmPs": 6.8,
+    "grossMargin": 46.2,
+    "netMargin": 24.1,
+    "nonGaapNetMargin": 26.5,
+    "netIncomeQ1": 32.5,
+    "netIncomeQ2": 29.8,
+    "netIncomeQ3": 31.2,
+    "netIncomeQ4": 28.6,
+    "notes": "可选备注，如数据来源、市场环境等"
+  },
+  {
+    "ticker": "MSFT",
+    "companyName": "Microsoft Corp.",
+    "snapshotDate": "2026-05-16",
+    "pe": 35.0,
+    "ps": 12.5,
+    "grossMargin": 69.8,
+    "netMargin": 35.2,
+    "nonGaapNetMargin": 38.1,
+    "netIncomeQ1": 256.0,
+    "netIncomeQ2": 241.5,
+    "netIncomeQ3": 233.0,
+    "netIncomeQ4": 248.8
+  }
+]
+```
+
+> 单条记录也可以直接粘贴对象（不带外层数组）。
+
+### 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `ticker` | string | ✅ | 股票代码，自动转大写 |
+| `companyName` | string | ✅ | 公司名称 |
+| `snapshotDate` | string | ✅ | 快照日期，格式 `YYYY-MM-DD` |
+| `pe` | number | | 市盈率（TTM） |
+| `ps` | number | | 市销率（TTM） |
+| `ntmPe` | number | | 前瞻市盈率（NTM） |
+| `ntmPs` | number | | 前瞻市销率（NTM） |
+| `grossMargin` | number | | 毛利率，填百分比数值（如 `46.2` 表示 46.2%） |
+| `netMargin` | number | | 净利率，填百分比数值 |
+| `nonGaapNetMargin` | number | | 扣非Net Margin / Non-GAAP 净利率 TTM，填百分比数值 |
+| `netIncomeQ1` | number | | 最新季度净利润，单位自定（如 亿元、百万美元） |
+| `netIncomeQ2` | number | | 上季度净利润 |
+| `netIncomeQ3` | number | | 再上季度净利润 |
+| `netIncomeQ4` | number | | 最早季度净利润 |
+| `notes` | string | | 备注 |
+
+---
+
 ## 开发
 
 ```bash

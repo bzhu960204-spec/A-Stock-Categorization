@@ -24,6 +24,8 @@
   --table-stripe: #090a0b;
   --modal-overlay: rgba(0, 0, 0, 0.88);
   --scrollbar-thumb: #252830;
+  --bg-primary: #0c0d0e;
+  --bg-secondary: #101214;
 }
 
 [data-theme="light"] {
@@ -50,6 +52,8 @@
   --table-stripe: #eae7df;
   --modal-overlay: rgba(0, 0, 0, 0.55);
   --scrollbar-thumb: #c0bdb5;
+  --bg-primary: #e8e5dd;
+  --bg-secondary: #dedad2;
 }
 
 /* ===== Reset & Base ===== */
@@ -66,6 +70,8 @@ body {
 .app-container {
   height: 100vh;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
   color: var(--text-primary);
   position: relative;
@@ -77,6 +83,7 @@ body {
   align-items: center;
   justify-content: space-between;
   height: 44px;
+  flex-shrink: 0;
   padding: 0 16px;
   background: var(--panel-bg);
   border-bottom: 2px solid var(--accent);
@@ -6205,3 +6212,760 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
   padding-top: 16px;
   border-top: 1px solid var(--border);
 }
+
+/* ── Import button & modal extras ─────────────────────────────── */
+.val-import-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.val-import-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.val-import-modal { width: 620px; }
+.val-import-hint {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+.val-import-hint code {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--panel-bg-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--accent);
+}
+.val-import-example {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  color: var(--text-secondary);
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.5;
+}
+.val-import-textarea {
+  width: 100%;
+  min-height: 140px;
+  resize: vertical;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  display: block;
+}
+.val-import-error {
+  margin-top: 8px;
+  font-size: 0.82rem;
+  color: var(--danger, #e74c3c);
+}
+
+/* ── Search bar (list tab) ───────────────────────────────────────── */
+.val-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 12px;
+  height: 36px;
+}
+.val-search-icon {
+  color: var(--text-muted);
+  font-size: 1rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.val-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+}
+.val-search-input::placeholder { color: var(--text-muted); }
+.val-search-clear {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.val-search-clear:hover { color: var(--text-primary); }
+.val-search-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Compare tab search ─────────────────────────────────────────── */
+.val-compare-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.val-compare-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 30px;
+  width: 260px;
+  margin-bottom: 10px;
+}
+.val-compare-search-input {
+  font-size: 0.82rem;
+}
+
+/* ── Search bar (list tab) ───────────────────────────────────────── */
+.val-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 12px;
+  height: 36px;
+}
+.val-search-icon {
+  color: var(--text-muted);
+  font-size: 1rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.val-search-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+}
+.val-search-input::placeholder { color: var(--text-muted); }
+.val-search-clear {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.val-search-clear:hover { color: var(--text-primary); }
+.val-search-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Compare tab search ─────────────────────────────────────────── */
+.val-compare-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.val-compare-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 30px;
+  width: 260px;
+  margin-bottom: 10px;
+}
+.val-compare-search-input {
+  font-size: 0.82rem;
+}
+
+/* ── Quarterly net income tooltip ───────────────────────────────── */
+.val-ni-avg {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dashed var(--text-muted);
+  display: inline-block;
+}
+.val-ni-tip {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 8px 14px;
+  white-space: nowrap;
+  z-index: 200;
+  text-align: left;
+  color: var(--text-secondary);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1;
+  min-width: 170px;
+  pointer-events: none;
+  flex-direction: column;
+  gap: 6px;
+}
+.val-ni-tip span {
+  display: block;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.val-ni-tip span:last-child { border-bottom: none; }
+.val-ni-avg:hover .val-ni-tip { display: flex; }
+
+/* ── Form section label ─────────────────────────────────────────── */
+.val-form-section-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+/* ── Quarterly net income tooltip ───────────────────────────────── */
+.val-ni-avg {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dashed var(--text-muted);
+  display: inline-block;
+}
+.val-ni-tip {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 8px 14px;
+  white-space: nowrap;
+  z-index: 200;
+  text-align: left;
+  color: var(--text-secondary);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1;
+  min-width: 170px;
+  pointer-events: none;
+  flex-direction: column;
+  gap: 6px;
+}
+.val-ni-tip span {
+  display: block;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.val-ni-tip span:last-child { border-bottom: none; }
+.val-ni-avg:hover .val-ni-tip { display: flex; }
+
+/* ── Form section label ─────────────────────────────────────────── */
+.val-form-section-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  margin-top: 2px;
+}
+
+/* ── Row clickable ──────────────────────────────────────────────── */
+.val-row-clickable { cursor: pointer; }
+.val-row-clickable:hover td { background: var(--hover-bg); }
+
+/* ── Detail modal ───────────────────────────────────────────────── */
+.val-detail-modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px 32px;
+  width: 600px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.val-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.val-detail-id { display: flex; flex-direction: column; gap: 4px; }
+.val-detail-ticker {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', monospace;
+}
+.val-detail-company {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.val-detail-date {
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-top: 6px;
+}
+
+/* Metrics grid */
+.val-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.val-detail-metric {
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.val-detail-metric-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.val-detail-metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+
+/* Sections */
+.val-detail-section { margin-bottom: 18px; }
+.val-detail-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* Quarterly grid */
+.val-detail-quarters {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.val-detail-quarter {
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  text-align: center;
+}
+.val-detail-quarter-avg {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.val-detail-quarter-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.val-detail-quarter-value {
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+.val-detail-quarter-avg .val-detail-quarter-value { color: var(--accent); }
+
+/* Notes */
+.val-detail-notes {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+/* ── Row clickable ──────────────────────────────────────────────── */
+.val-row-clickable { cursor: pointer; }
+.val-row-clickable:hover td { background: var(--hover-bg); }
+
+/* ── Detail modal ───────────────────────────────────────────────── */
+.val-detail-modal {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 28px 32px;
+  width: 600px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.val-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.val-detail-id { display: flex; flex-direction: column; gap: 4px; }
+.val-detail-ticker {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.04em;
+  font-family: 'JetBrains Mono', monospace;
+}
+.val-detail-company {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+.val-detail-date {
+  font-size: 0.8rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-top: 6px;
+}
+
+/* Metrics grid */
+.val-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.val-detail-metric {
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+.val-detail-metric-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.val-detail-metric-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+
+/* Sections */
+.val-detail-section { margin-bottom: 18px; }
+.val-detail-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* Quarterly grid */
+.val-detail-quarters {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+.val-detail-quarter {
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  text-align: center;
+}
+.val-detail-quarter-avg {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.val-detail-quarter-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 5px;
+}
+.val-detail-quarter-value {
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text-primary);
+}
+.val-detail-quarter-avg .val-detail-quarter-value { color: var(--accent); }
+
+/* Notes */
+.val-detail-notes {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  background: var(--panel-bg-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+/* ── Import mode toggle ─────────────────────────────────────────── */
+.val-import-mode-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  width: fit-content;
+}
+.val-import-mode-btn {
+  padding: 6px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-weight: 500;
+}
+.val-import-mode-btn + .val-import-mode-btn {
+  border-left: 1px solid var(--border);
+}
+.val-import-mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.val-import-mode-btn:not(.active):hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+/* ── Import mode toggle ─────────────────────────────────────────── */
+.val-import-mode-bar {
+  display: flex;
+  gap: 0;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  width: fit-content;
+}
+.val-import-mode-btn {
+  padding: 6px 20px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  font-weight: 500;
+}
+.val-import-mode-btn + .val-import-mode-btn {
+  border-left: 1px solid var(--border);
+}
+.val-import-mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.val-import-mode-btn:not(.active):hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+/* ── Sortable column headers ────────────────────────────────────── */
+.val-th-sort {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.val-th-sort:hover {
+  background: var(--hover-bg);
+}
+.val-sort-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  opacity: 0.35;
+  vertical-align: middle;
+}
+.val-sort-icon.active {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* ── Sortable column headers ────────────────────────────────────── */
+.val-th-sort {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.val-th-sort:hover {
+  background: var(--hover-bg);
+}
+.val-sort-icon {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 0.75rem;
+  opacity: 0.35;
+  vertical-align: middle;
+}
+.val-sort-icon.active {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* ── Filter bar ─────────────────────────────────────────────────── */
+.val-filter-add-btn {
+  margin-left: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-family: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.val-filter-add-btn:hover { background: var(--hover-bg); }
+
+.val-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel-bg-2);
+}
+.val-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.val-filter-where {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  min-width: 28px;
+}
+.val-filter-logic-btn {
+  min-width: 36px;
+  padding: 2px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+.val-filter-select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.val-filter-op {
+  width: 52px;
+  text-align: center;
+}
+.val-filter-input {
+  width: 80px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--input-bg);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-family: inherit;
+}
+.val-filter-input:focus { outline: none; border-color: var(--accent); }
+.val-filter-remove {
+  padding: 2px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  cursor: pointer;
+  border-radius: 3px;
+}
+.val-filter-remove:hover { color: #e05; background: var(--hover-bg); }
+.val-filter-clear {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+.val-filter-clear:hover { color: var(--text-primary); background: var(--hover-bg); }

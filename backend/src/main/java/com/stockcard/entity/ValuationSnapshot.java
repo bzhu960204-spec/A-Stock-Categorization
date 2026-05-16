@@ -47,6 +47,15 @@ public class ValuationSnapshot {
     /** 净利率（百分比） */
     private Double netMargin;
 
+    /** 扣非净利润率 TTM Non-GAAP Net Margin（百分比） */
+    private Double nonGaapNetMargin;
+
+    /** 过去四季度净利率（Q1=最新季度，Q4=最早），百分比，如 5.2 表示 5.2% */
+    private Double netMarginQ1;
+    private Double netMarginQ2;
+    private Double netMarginQ3;
+    private Double netMarginQ4;
+
     /** 可选备注 */
     @Column(length = 500)
     private String notes;

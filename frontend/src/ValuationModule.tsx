@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import {
   getValuationSnapshots,
   getValuationCompanies,
@@ -25,13 +25,20 @@ const METRICS: MetricDef[] = [
   { key: 'ps',          label: 'PS',      isPercent: false, lowIsBetter: true  },
   { key: 'ntmPe',       label: 'NTM PE',  isPercent: false, lowIsBetter: true  },
   { key: 'ntmPs',       label: 'NTM PS',  isPercent: false, lowIsBetter: true  },
-  { key: 'grossMargin', label: '毛利率',  isPercent: true,  lowIsBetter: false },
-  { key: 'netMargin',   label: '净利率',  isPercent: true,  lowIsBetter: false },
+  { key: 'grossMargin',       label: '毛利率',          isPercent: true,  lowIsBetter: false },
+  { key: 'nonGaapNetMargin',  label: 'Non-GAAP 净利率', isPercent: true,  lowIsBetter: false },
 ];
 
 function fmtNum(v: number | null | undefined, isPercent = false): string {
   if (v == null) return '—';
   return isPercent ? `${v.toFixed(1)}%` : v.toFixed(1);
+}
+
+function avgNetIncome(s: ValuationSnapshot): number | null {
+  const vals = [s.netMarginQ1, s.netMarginQ2, s.netMarginQ3, s.netMarginQ4]
+    .filter((v): v is number => v != null);
+  if (vals.length === 0) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
 function emptyForm(): Omit<ValuationSnapshot, 'id' | 'createdAt'> {
@@ -45,6 +52,11 @@ function emptyForm(): Omit<ValuationSnapshot, 'id' | 'createdAt'> {
     ntmPs: undefined,
     grossMargin: undefined,
     netMargin: undefined,
+    nonGaapNetMargin: undefined,
+    netMarginQ1: undefined,
+    netMarginQ2: undefined,
+    netMarginQ3: undefined,
+    netMarginQ4: undefined,
     notes: '',
   };
 }
@@ -56,11 +68,12 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function ValuationModule({ onGoHome }: Props) {
-  const [darkMode, setDarkMode] = useState(document.documentElement.classList.contains('dark'));
+  const [darkMode, setDarkMode] = useState(document.documentElement.getAttribute('data-theme') === 'dark');
   const [tab, setTab] = useState<TabId>('list');
   const [snapshots, setSnapshots] = useState<ValuationSnapshot[]>([]);
   const [companies, setCompanies] = useState<ValuationCompany[]>([]);
-  const [filterTicker, setFilterTicker] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [compareSearch, setCompareSearch] = useState('');
   const [compareSelected, setCompareSelected] = useState<string[]>([]);
 
   // Form state
@@ -69,13 +82,69 @@ export default function ValuationModule({ onGoHome }: Props) {
   const [form, setForm] = useState<Omit<ValuationSnapshot, 'id' | 'createdAt'>>(emptyForm());
   const [saving, setSaving] = useState(false);
 
+  // Detail state
+  const [detailSnapshot, setDetailSnapshot] = useState<ValuationSnapshot | null>(null);
+
+  // Import state
+  const [importOpen, setImportOpen] = useState(false);
+  const [importJson, setImportJson] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMode, setImportMode] = useState<'add' | 'update'>('add');
+
+  type SortKey = 'snapshotDate' | 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin';
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  // Filter state
+  type FilterKey = 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin';
+  type FilterOp = '>' | '<' | '>=' | '<=' | '=';
+  interface FilterRule { id: number; key: FilterKey; op: FilterOp; value: string; }
+  const FILTER_KEYS: { key: FilterKey; label: string }[] = [
+    { key: 'pe',               label: 'PE'               },
+    { key: 'ps',               label: 'PS'               },
+    { key: 'ntmPe',            label: 'NTM PE'           },
+    { key: 'ntmPs',            label: 'NTM PS'           },
+    { key: 'grossMargin',      label: '毛利率 %'         },
+    { key: 'nonGaapNetMargin', label: 'Non-GAAP 净利率 %' },
+    { key: 'avgMargin',        label: '净利率(季均) %'     },
+  ];
+  const [filters, setFilters] = useState<FilterRule[]>([]);
+  const [filterLogic, setFilterLogic] = useState<'AND' | 'OR'>('AND');
+  const filterIdRef = useRef(0);
+
+  function addFilter() {
+    filterIdRef.current += 1;
+    setFilters(fs => [...fs, { id: filterIdRef.current, key: 'pe', op: '<=', value: '' }]);
+  }
+  function removeFilter(id: number) {
+    setFilters(fs => fs.filter(f => f.id !== id));
+  }
+  function updateFilter(id: number, patch: Partial<FilterRule>) {
+    setFilters(fs => fs.map(f => f.id === id ? { ...f, ...patch } as FilterRule : f));
+  }
+
+  function handleSort(key: SortKey) {
+    if (sortKey !== key) {
+      setSortKey(key);
+      setSortDir('asc');
+    } else if (sortDir === 'asc') {
+      setSortDir('desc');
+    } else {
+      // third click: clear sort
+      setSortKey(null);
+      setSortDir('asc');
+    }
+  }
+
+  function sortIcon(key: SortKey) {
+    if (sortKey !== key) return <span className="val-sort-icon">⇅</span>;
+    return <span className="val-sort-icon active">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  }
+
   // ── Dark mode sync ──────────────────────────────────────────────────────
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
   // ── Data loading ────────────────────────────────────────────────────────
@@ -94,9 +163,68 @@ export default function ValuationModule({ onGoHome }: Props) {
 
   // ── Derived data ────────────────────────────────────────────────────────
 
-  const filteredSnapshots = filterTicker
-    ? snapshots.filter(s => s.ticker === filterTicker)
+  const q = searchQuery.trim().toLowerCase();
+  const baseFiltered = q
+    ? snapshots.filter(s =>
+        s.ticker.toLowerCase().includes(q) ||
+        s.companyName.toLowerCase().includes(q) ||
+        (s.notes ?? '').toLowerCase().includes(q)
+      )
     : snapshots;
+
+  // Apply filter rules
+  function getFilterVal(s: ValuationSnapshot, key: string): number | null {
+    if (key === 'avgMargin') return avgNetIncome(s);
+    return (s[key as keyof ValuationSnapshot] as number | null | undefined) ?? null;
+  }
+  function testFilter(s: ValuationSnapshot, f: { key: string; op: string; value: string }): boolean {
+    const v = getFilterVal(s, f.key);
+    const t = parseFloat(f.value);
+    if (v == null || isNaN(t)) return true;
+    if (f.op === '>')  return v > t;
+    if (f.op === '<')  return v < t;
+    if (f.op === '>=') return v >= t;
+    if (f.op === '<=') return v <= t;
+    return Math.abs(v - t) < 0.0001;
+  }
+  const activeFilters = filters.filter(f => f.value.trim() !== '');
+  const afterFilter = activeFilters.length === 0
+    ? baseFiltered
+    : baseFiltered.filter(s =>
+        filterLogic === 'AND'
+          ? activeFilters.every(f => testFilter(s, f))
+          : activeFilters.some(f => testFilter(s, f))
+      );
+
+  const filteredSnapshots = sortKey
+    ? [...afterFilter].sort((a, b) => {
+        let av: number | null | undefined;
+        let bv: number | null | undefined;
+        if (sortKey === 'avgMargin') {
+          av = avgNetIncome(a);
+          bv = avgNetIncome(b);
+        } else if (sortKey === 'snapshotDate') {
+          av = a.snapshotDate ? new Date(a.snapshotDate).getTime() : null;
+          bv = b.snapshotDate ? new Date(b.snapshotDate).getTime() : null;
+        } else {
+          av = a[sortKey] as number | null | undefined;
+          bv = b[sortKey] as number | null | undefined;
+        }
+        // nulls last
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return sortDir === 'asc' ? av - bv : bv - av;
+      })
+    : afterFilter;
+
+  const cq = compareSearch.trim().toLowerCase();
+  const filteredCompanies = cq
+    ? companies.filter(c =>
+        c.ticker.toLowerCase().includes(cq) ||
+        c.companyName.toLowerCase().includes(cq)
+      )
+    : companies;
 
   // Latest snapshot per ticker (for comparison view)
   const latestByTicker: Record<string, ValuationSnapshot> = {};
@@ -131,6 +259,11 @@ export default function ValuationModule({ onGoHome }: Props) {
       ntmPs: s.ntmPs,
       grossMargin: s.grossMargin,
       netMargin: s.netMargin,
+      nonGaapNetMargin: s.nonGaapNetMargin,
+      netMarginQ1: s.netMarginQ1,
+      netMarginQ2: s.netMarginQ2,
+      netMarginQ3: s.netMarginQ3,
+      netMarginQ4: s.netMarginQ4,
       notes: s.notes ?? '',
     });
     setFormOpen(true);
@@ -139,6 +272,108 @@ export default function ValuationModule({ onGoHome }: Props) {
   function closeForm() {
     setFormOpen(false);
     setEditingId(null);
+  }
+
+  function openImport() {
+    setImportJson('');
+    setImportError(null);
+    setImportMode('add');
+    setImportOpen(true);
+  }
+
+  function closeImport() {
+    setImportOpen(false);
+    setImportError(null);
+  }
+
+  async function handleImport() {
+    setImportError(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(importJson.trim());
+    } catch {
+      setImportError('JSON 格式错误，请检查语法');
+      return;
+    }
+    const items: unknown[] = Array.isArray(parsed) ? parsed : [parsed];
+    if (items.length === 0) {
+      setImportError('数组为空，请至少提供一条记录');
+      return;
+    }
+    // Validate required fields
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i] as Record<string, unknown>;
+      if (!it.ticker || typeof it.ticker !== 'string') {
+        setImportError(`第 ${i + 1} 条：缺少 ticker 字段`);
+        return;
+      }
+      if (!it.companyName || typeof it.companyName !== 'string') {
+        setImportError(`第 ${i + 1} 条：缺少 companyName 字段`);
+        return;
+      }
+      if (importMode === 'add' && (!it.snapshotDate || typeof it.snapshotDate !== 'string')) {
+        setImportError(`第 ${i + 1} 条：新增模式下缺少 snapshotDate 字段（格式 YYYY-MM-DD）`);
+        return;
+      }
+    }
+    setImporting(true);
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      for (const it of items as Record<string, unknown>[]) {
+        const ticker = String(it.ticker).toUpperCase();
+        const payload = {
+          ticker,
+          companyName: String(it.companyName),
+          snapshotDate: it.snapshotDate ? String(it.snapshotDate) : today,
+          pe: it.pe != null ? Number(it.pe) : undefined,
+          ps: it.ps != null ? Number(it.ps) : undefined,
+          ntmPe: it.ntmPe != null ? Number(it.ntmPe) : undefined,
+          ntmPs: it.ntmPs != null ? Number(it.ntmPs) : undefined,
+          grossMargin: it.grossMargin != null ? Number(it.grossMargin) : undefined,
+          netMargin: it.netMargin != null ? Number(it.netMargin) : undefined,
+          nonGaapNetMargin: it.nonGaapNetMargin != null ? Number(it.nonGaapNetMargin) : undefined,
+          netMarginQ1: it.netMarginQ1 != null ? Number(it.netMarginQ1) : undefined,
+          netMarginQ2: it.netMarginQ2 != null ? Number(it.netMarginQ2) : undefined,
+          netMarginQ3: it.netMarginQ3 != null ? Number(it.netMarginQ3) : undefined,
+          netMarginQ4: it.netMarginQ4 != null ? Number(it.netMarginQ4) : undefined,
+          notes: it.notes != null ? String(it.notes) : '',
+        };
+
+        if (importMode === 'update') {
+          const existing = latestByTicker[ticker];
+          if (existing) {
+            // Merge: null fields in JSON keep the existing value
+            await updateValuationSnapshot(existing.id, {
+              ...payload,
+              snapshotDate: it.snapshotDate ? String(it.snapshotDate) : today,
+              pe:             it.pe             != null ? Number(it.pe)             : existing.pe             ?? undefined,
+              ps:             it.ps             != null ? Number(it.ps)             : existing.ps             ?? undefined,
+              ntmPe:          it.ntmPe          != null ? Number(it.ntmPe)          : existing.ntmPe          ?? undefined,
+              ntmPs:          it.ntmPs          != null ? Number(it.ntmPs)          : existing.ntmPs          ?? undefined,
+              grossMargin:    it.grossMargin    != null ? Number(it.grossMargin)    : existing.grossMargin    ?? undefined,
+              netMargin:      it.netMargin      != null ? Number(it.netMargin)      : existing.netMargin      ?? undefined,
+              nonGaapNetMargin: it.nonGaapNetMargin != null ? Number(it.nonGaapNetMargin) : existing.nonGaapNetMargin ?? undefined,
+              netMarginQ1:    it.netMarginQ1    != null ? Number(it.netMarginQ1)    : existing.netMarginQ1    ?? undefined,
+              netMarginQ2:    it.netMarginQ2    != null ? Number(it.netMarginQ2)    : existing.netMarginQ2    ?? undefined,
+              netMarginQ3:    it.netMarginQ3    != null ? Number(it.netMarginQ3)    : existing.netMarginQ3    ?? undefined,
+              netMarginQ4:    it.netMarginQ4    != null ? Number(it.netMarginQ4)    : existing.netMarginQ4    ?? undefined,
+              notes: it.notes != null && String(it.notes) !== '' ? String(it.notes) : existing.notes ?? '',
+            });
+          } else {
+            // Ticker not found — fall back to create
+            await createValuationSnapshot(payload);
+          }
+        } else {
+          await createValuationSnapshot(payload);
+        }
+      }
+      closeImport();
+      await loadData();
+    } catch {
+      setImportError('导入失败，请检查数据后重试');
+    } finally {
+      setImporting(false);
+    }
   }
 
   async function handleSave() {
@@ -163,10 +398,11 @@ export default function ValuationModule({ onGoHome }: Props) {
     }
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: number, onDone?: () => void) {
     if (!confirm('确定删除这条快照记录？')) return;
     await deleteValuationSnapshot(id);
     await loadData();
+    onDone?.();
   }
 
   function toggleCompare(ticker: string) {
@@ -198,7 +434,36 @@ export default function ValuationModule({ onGoHome }: Props) {
     return String(v);
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────
+
+  function handleExportTemplate() {
+    const today = new Date().toISOString().slice(0, 10);
+    const template = companies.map(c => ({
+      ticker: c.ticker,
+      companyName: c.companyName,
+      pe: null,
+      ps: null,
+      ntmPe: null,
+      ntmPs: null,
+      grossMargin: null,
+      netMargin: null,
+      nonGaapNetMargin: null,
+      netMarginQ1: null,
+      netMarginQ2: null,
+      netMarginQ3: null,
+      netMarginQ4: null,
+      notes: ''
+    }));
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `valuation-template-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="app-container">
@@ -209,6 +474,8 @@ export default function ValuationModule({ onGoHome }: Props) {
           <h1 className="app-title">估值比较</h1>
         </div>
         <div className="header-right">
+          <button className="val-import-btn" onClick={openImport}>↑ 导入 JSON</button>
+          <button className="val-import-btn" onClick={handleExportTemplate} title="导出包含所有公司的空白模板，填入最新数据后再导入">↓ 导出模板</button>
           <button className="confirm-btn" onClick={openAdd}>+ 添加快照</button>
           <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
             {darkMode ? 'LITE' : 'TERM'}
@@ -238,38 +505,87 @@ export default function ValuationModule({ onGoHome }: Props) {
         {/* ── 快照记录 tab ─────────────────────────────────────────────── */}
         {tab === 'list' && (
           <>
-            {/* Company filter */}
-            <div className="val-filter-bar">
-              <button
-                className={`val-filter-chip${filterTicker === null ? ' active' : ''}`}
-                onClick={() => setFilterTicker(null)}
-              >全部</button>
-              {companies.map(c => (
-                <button
-                  key={c.ticker}
-                  className={`val-filter-chip${filterTicker === c.ticker ? ' active' : ''}`}
-                  onClick={() => setFilterTicker(filterTicker === c.ticker ? null : c.ticker)}
-                >
-                  {c.ticker} · {c.companyName}
-                </button>
-              ))}
+            {/* Search bar */}
+            <div className="val-search-bar">
+              <span className="val-search-icon">⌕</span>
+              <input
+                className="val-search-input"
+                placeholder="搜索股票代码、公司名称或备注…"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button className="val-search-clear" onClick={() => setSearchQuery('')}>✕</button>
+              )}
+              <span className="val-search-count">
+                {filteredSnapshots.length} / {snapshots.length} 条
+              </span>
+              <button className="val-filter-add-btn" onClick={addFilter}>⧹ 筛选</button>
             </div>
+
+            {/* Filter rows */}
+            {filters.length > 0 && (
+              <div className="val-filter-bar">
+                {filters.map((f, i) => (
+                  <div key={f.id} className="val-filter-row">
+                    {i === 0 ? (
+                      <span className="val-filter-where">满足</span>
+                    ) : (
+                      <button
+                        className="val-filter-logic-btn"
+                        onClick={() => setFilterLogic(l => l === 'AND' ? 'OR' : 'AND')}
+                      >{filterLogic}</button>
+                    )}
+                    <select
+                      className="val-filter-select"
+                      value={f.key}
+                      onChange={e => updateFilter(f.id, { key: e.target.value as FilterRule['key'] })}
+                    >
+                      {FILTER_KEYS.map(k => (
+                        <option key={k.key} value={k.key}>{k.label}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="val-filter-select val-filter-op"
+                      value={f.op}
+                      onChange={e => updateFilter(f.id, { op: e.target.value as FilterRule['op'] })}
+                    >
+                      <option value="<">&lt;</option>
+                      <option value="<=">&le;</option>
+                      <option value="=">=</option>
+                      <option value=">=">&ge;</option>
+                      <option value=">">&gt;</option>
+                    </select>
+                    <input
+                      className="val-filter-input"
+                      type="number"
+                      step="any"
+                      placeholder="数字"
+                      value={f.value}
+                      onChange={e => updateFilter(f.id, { value: e.target.value })}
+                    />
+                    <button className="val-filter-remove" onClick={() => removeFilter(f.id)}>✕</button>
+                  </div>
+                ))}
+                <button className="val-filter-clear" onClick={() => setFilters([])}>清除全部</button>
+              </div>
+            )}
 
             {/* Snapshot table */}
             <div className="val-table-wrap">
               <table className="val-table">
                 <thead>
                   <tr>
-                    <th>快照日期</th>
+                    <th className="val-th-sort" onClick={() => handleSort('snapshotDate')}>快照日期{sortIcon('snapshotDate')}</th>
                     <th>代码</th>
                     <th>公司</th>
-                    <th>PE</th>
-                    <th>PS</th>
-                    <th>NTM PE</th>
-                    <th>NTM PS</th>
-                    <th>毛利率</th>
-                    <th>净利率</th>
-                    <th>备注</th>
+                    <th className="val-th-sort" onClick={() => handleSort('pe')}>PE{sortIcon('pe')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('ps')}>PS{sortIcon('ps')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('ntmPe')}>NTM PE{sortIcon('ntmPe')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('ntmPs')}>NTM PS{sortIcon('ntmPs')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('grossMargin')}>毛利率{sortIcon('grossMargin')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('nonGaapNetMargin')}>Non-GAAP 净利率{sortIcon('nonGaapNetMargin')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('avgMargin')}>净利率(季均){sortIcon('avgMargin')}</th>
                     <th style={{ width: 80 }}></th>
                   </tr>
                 </thead>
@@ -279,12 +595,12 @@ export default function ValuationModule({ onGoHome }: Props) {
                       <td colSpan={11} className="val-empty">
                         {snapshots.length === 0
                           ? '暂无数据，点击右上角「+ 添加快照」开始记录'
-                          : '该公司暂无快照'}
+                          : `没有匹配「${searchQuery}」的记录`}
                       </td>
                     </tr>
                   )}
                   {filteredSnapshots.map(s => (
-                    <tr key={s.id} className="val-row">
+                    <tr key={s.id} className="val-row val-row-clickable" onClick={() => setDetailSnapshot(s)}>
                       <td className="val-date">{s.snapshotDate}</td>
                       <td><strong>{s.ticker}</strong></td>
                       <td>{s.companyName}</td>
@@ -293,9 +609,25 @@ export default function ValuationModule({ onGoHome }: Props) {
                       <td className="val-num">{fmtNum(s.ntmPe)}</td>
                       <td className="val-num">{fmtNum(s.ntmPs)}</td>
                       <td className="val-num">{fmtNum(s.grossMargin, true)}</td>
-                      <td className="val-num">{fmtNum(s.netMargin, true)}</td>
-                      <td className="val-note" title={s.notes ?? ''}>{s.notes ?? ''}</td>
-                      <td>
+                      <td className="val-num">{fmtNum(s.nonGaapNetMargin, true)}</td>
+                      <td className="val-num">
+                        {(() => {
+                          const avg = avgNetIncome(s);
+                          if (avg == null) return '—';
+                          return (
+                            <span className="val-ni-avg">
+                              {fmtNum(avg, true)}
+                              <span className="val-ni-tip">
+                                <span>Q1 (最新): {fmtNum(s.netMarginQ1, true)}</span>
+                                <span>Q2: {fmtNum(s.netMarginQ2, true)}</span>
+                                <span>Q3: {fmtNum(s.netMarginQ3, true)}</span>
+                                <span>Q4 (最早): {fmtNum(s.netMarginQ4, true)}</span>
+                              </span>
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td onClick={e => e.stopPropagation()}>
                         <div className="val-row-actions">
                           <button className="val-action-btn" onClick={() => openEdit(s)}>编辑</button>
                           <button className="val-action-btn danger" onClick={() => handleDelete(s.id)}>删除</button>
@@ -313,12 +645,32 @@ export default function ValuationModule({ onGoHome }: Props) {
         {tab === 'compare' && (
           <>
             <div className="val-compare-selector">
-              <span className="val-compare-label">选择公司（最新快照对比）：</span>
+              <div className="val-compare-top">
+                <span className="val-compare-label">选择公司（最新快照对比）：</span>
+                {compareSelected.length > 0 && (
+                  <button className="val-clear-btn" onClick={() => setCompareSelected([])}>清除选择</button>
+                )}
+              </div>
+              <div className="val-compare-search-wrap">
+                <span className="val-search-icon">⌕</span>
+                <input
+                  className="val-search-input val-compare-search-input"
+                  placeholder="输入代码或公司名筛选…"
+                  value={compareSearch}
+                  onChange={e => setCompareSearch(e.target.value)}
+                />
+                {compareSearch && (
+                  <button className="val-search-clear" onClick={() => setCompareSearch('')}>✕</button>
+                )}
+              </div>
               <div className="val-compare-chips">
                 {companies.length === 0 && (
                   <span className="val-compare-empty-hint">请先在「快照记录」中添加数据</span>
                 )}
-                {companies.map(c => (
+                {filteredCompanies.length === 0 && companies.length > 0 && (
+                  <span className="val-compare-empty-hint">没有匹配的公司</span>
+                )}
+                {filteredCompanies.map(c => (
                   <button
                     key={c.ticker}
                     className={`val-filter-chip${compareSelected.includes(c.ticker) ? ' active' : ''}`}
@@ -327,11 +679,6 @@ export default function ValuationModule({ onGoHome }: Props) {
                     {c.ticker} · {c.companyName}
                   </button>
                 ))}
-                {compareSelected.length > 0 && (
-                  <button className="val-clear-btn" onClick={() => setCompareSelected([])}>
-                    清除选择
-                  </button>
-                )}
               </div>
             </div>
 
@@ -384,6 +731,152 @@ export default function ValuationModule({ onGoHome }: Props) {
           </>
         )}
       </div>
+
+      {/* ── Detail modal ───────────────────────────────────────────────── */}
+      {detailSnapshot && (
+        <div className="val-form-overlay" onClick={() => setDetailSnapshot(null)}>
+          <div className="val-detail-modal" onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="val-detail-header">
+              <div className="val-detail-id">
+                <span className="val-detail-ticker">{detailSnapshot.ticker}</span>
+                <span className="val-detail-company">{detailSnapshot.companyName}</span>
+              </div>
+              <span className="val-detail-date">{detailSnapshot.snapshotDate}</span>
+            </div>
+
+            {/* Valuation metrics */}
+            <div className="val-detail-metrics">
+              {[
+                { label: 'PE',               value: fmtNum(detailSnapshot.pe) },
+                { label: 'PS',               value: fmtNum(detailSnapshot.ps) },
+                { label: 'NTM PE',           value: fmtNum(detailSnapshot.ntmPe) },
+                { label: 'NTM PS',           value: fmtNum(detailSnapshot.ntmPs) },
+                { label: '毛利率',           value: fmtNum(detailSnapshot.grossMargin, true) },
+                { label: '净利率',           value: fmtNum(detailSnapshot.netMargin, true) },
+                { label: 'Non-GAAP 净利率',  value: fmtNum(detailSnapshot.nonGaapNetMargin, true) },
+              ].map(m => (
+                <div key={m.label} className="val-detail-metric">
+                  <div className="val-detail-metric-label">{m.label}</div>
+                  <div className="val-detail-metric-value">{m.value}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Quarterly net margin */}
+            {[detailSnapshot.netMarginQ1, detailSnapshot.netMarginQ2,
+              detailSnapshot.netMarginQ3, detailSnapshot.netMarginQ4].some(v => v != null) && (
+              <div className="val-detail-section">
+                <div className="val-detail-section-title">过去四季度净利率</div>
+                <div className="val-detail-quarters">
+                  {[
+                    { label: 'Q1（最新）', val: detailSnapshot.netMarginQ1 },
+                    { label: 'Q2',        val: detailSnapshot.netMarginQ2 },
+                    { label: 'Q3',        val: detailSnapshot.netMarginQ3 },
+                    { label: 'Q4（最早）', val: detailSnapshot.netMarginQ4 },
+                  ].map(q => (
+                    <div key={q.label} className="val-detail-quarter">
+                      <div className="val-detail-quarter-label">{q.label}</div>
+                      <div className="val-detail-quarter-value">{fmtNum(q.val, true)}</div>
+                    </div>
+                  ))}
+                  <div className="val-detail-quarter val-detail-quarter-avg">
+                    <div className="val-detail-quarter-label">季均</div>
+                    <div className="val-detail-quarter-value">
+                      {fmtNum(avgNetIncome(detailSnapshot), true)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notes */}
+            {detailSnapshot.notes && (
+              <div className="val-detail-section">
+                <div className="val-detail-section-title">备注</div>
+                <div className="val-detail-notes">{detailSnapshot.notes}</div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="val-form-actions">
+              <button className="val-action-btn danger" onClick={() =>
+                handleDelete(detailSnapshot.id, () => setDetailSnapshot(null))
+              }>删除</button>
+              <div style={{ flex: 1 }} />
+              <button className="cancel-btn" onClick={() => setDetailSnapshot(null)}>关闭</button>
+              <button className="confirm-btn" onClick={() => {
+                setDetailSnapshot(null);
+                openEdit(detailSnapshot);
+              }}>编辑</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Import modal ───────────────────────────────────────────────── */}
+      {importOpen && (
+        <div className="val-form-overlay" onClick={closeImport}>
+          <div className="val-form-modal val-import-modal" onClick={e => e.stopPropagation()}>
+            <div className="val-form-title">批量导入估值快照（JSON）</div>
+
+            {/* Mode toggle */}
+            <div className="val-import-mode-bar">
+              <button
+                className={`val-import-mode-btn${importMode === 'add' ? ' active' : ''}`}
+                onClick={() => setImportMode('add')}
+              >
+                ＋ 新增模式
+              </button>
+              <button
+                className={`val-import-mode-btn${importMode === 'update' ? ' active' : ''}`}
+                onClick={() => setImportMode('update')}
+              >
+                ↻ 更新模式
+              </button>
+            </div>
+            <p className="val-import-hint">
+              {importMode === 'add'
+                ? <>粘贴 JSON 数组，每条记录必须包含 <code>ticker</code>、<code>companyName</code>、<code>snapshotDate</code>，其余字段可选。</>
+                : <>更新模式：按 <code>ticker</code> 匹配<strong>最近一条</strong>快照并覆盖，<code>snapshotDate</code> 缺失时自动填今天；JSON 中为 <code>null</code> 的字段保留原值。找不到的 ticker 自动新增。</>
+              }
+            </p>
+            <pre className="val-import-example">{`[
+  {
+    "ticker": "AAPL",
+    "companyName": "Apple Inc.",
+    "snapshotDate": "2026-05-16",
+    "pe": 28.5,
+    "ps": 7.2,
+    "ntmPe": 25.0,
+    "ntmPs": 6.8,
+    "grossMargin": 46.2,
+    "netMargin": 24.1,
+    "nonGaapNetMargin": 26.3,
+    "netMarginQ1": 25.1,
+    "netMarginQ2": 24.8,
+    "netMarginQ3": 25.9,
+    "netMarginQ4": 20.6,
+    "notes": "可选备注"
+  }
+]`}</pre>
+            <textarea
+              className="val-form-input val-import-textarea"
+              placeholder="在此粘贴 JSON…"
+              value={importJson}
+              onChange={e => { setImportJson(e.target.value); setImportError(null); }}
+            />
+            {importError && <div className="val-import-error">{importError}</div>}
+            <div className="val-form-actions">
+              <button className="cancel-btn" onClick={closeImport}>取消</button>
+              <button className="confirm-btn" disabled={importing || !importJson.trim()} onClick={handleImport}>
+                {importing ? '处理中…' : importMode === 'update' ? '确认更新' : '确认导入'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Form modal ─────────────────────────────────────────────────── */}
       {formOpen && (
@@ -498,6 +991,66 @@ export default function ValuationModule({ onGoHome }: Props) {
                   placeholder="如 24.1"
                   value={numValue('netMargin')}
                   onChange={numChange('netMargin')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Non-GAAP 净利率 %</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.1"
+                  placeholder="扣非净利润率 TTM"
+                  value={numValue('nonGaapNetMargin')}
+                  onChange={numChange('nonGaapNetMargin')}
+                />
+              </div>
+
+              {/* Quarterly net margin */}
+              <div className="val-form-group full val-form-section-label">
+                过去四季度净利率 %（Q1 = 最新季度）
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q1 净利率 %（最新）</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder="最近一个季度"
+                  value={numValue('netMarginQ1')}
+                  onChange={numChange('netMarginQ1')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q2 净利率 %</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder=""
+                  value={numValue('netMarginQ2')}
+                  onChange={numChange('netMarginQ2')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q3 净利率 %</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder=""
+                  value={numValue('netMarginQ3')}
+                  onChange={numChange('netMarginQ3')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q4 净利率 %（最早）</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder=""
+                  value={numValue('netMarginQ4')}
+                  onChange={numChange('netMarginQ4')}
                 />
               </div>
 

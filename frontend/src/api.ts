@@ -331,6 +331,11 @@ export interface ValuationSnapshot {
   ntmPs?: number | null;
   grossMargin?: number | null;
   netMargin?: number | null;
+  nonGaapNetMargin?: number | null;
+  netMarginQ1?: number | null;
+  netMarginQ2?: number | null;
+  netMarginQ3?: number | null;
+  netMarginQ4?: number | null;
   notes?: string;
   createdAt: string;
 }
