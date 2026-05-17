@@ -374,12 +374,16 @@ public class ImageController {
     "ntmPe": 25.0,
     "ntmPs": 6.8,
     "grossMargin": 46.2,
+    "grossMarginQ1": 46.5,
+    "grossMarginQ2": 46.1,
+    "grossMarginQ3": 45.8,
+    "grossMarginQ4": 46.4,
     "netMargin": 24.1,
     "nonGaapNetMargin": 26.5,
-    "netIncomeQ1": 32.5,
-    "netIncomeQ2": 29.8,
-    "netIncomeQ3": 31.2,
-    "netIncomeQ4": 28.6,
+    "netMarginQ1": 25.1,
+    "netMarginQ2": 24.8,
+    "netMarginQ3": 25.9,
+    "netMarginQ4": 20.6,
     "notes": "可选备注，如数据来源、市场环境等"
   },
   {
@@ -389,12 +393,16 @@ public class ImageController {
     "pe": 35.0,
     "ps": 12.5,
     "grossMargin": 69.8,
+    "grossMarginQ1": 70.1,
+    "grossMarginQ2": 69.5,
+    "grossMarginQ3": 69.8,
+    "grossMarginQ4": 70.0,
     "netMargin": 35.2,
     "nonGaapNetMargin": 38.1,
-    "netIncomeQ1": 256.0,
-    "netIncomeQ2": 241.5,
-    "netIncomeQ3": 233.0,
-    "netIncomeQ4": 248.8
+    "netMarginQ1": 36.2,
+    "netMarginQ2": 34.5,
+    "netMarginQ3": 35.0,
+    "netMarginQ4": 35.1
   }
 ]
 ```
@@ -412,13 +420,17 @@ public class ImageController {
 | `ps` | number | | 市销率（TTM） |
 | `ntmPe` | number | | 前瞻市盈率（NTM） |
 | `ntmPs` | number | | 前瞻市销率（NTM） |
-| `grossMargin` | number | | 毛利率，填百分比数值（如 `46.2` 表示 46.2%） |
+| `grossMargin` | number | | 毛利率，填百分比数值（如 `46.2` 表示 46.2%），为兼容旧数据保留 |
+| `grossMarginQ1` | number | | 最新季度毛利率（百分比），Q1-Q4 的平均值将显示为「毛利率(季均)」 |
+| `grossMarginQ2` | number | | 上季度毛利率 |
+| `grossMarginQ3` | number | | 再上季度毛利率 |
+| `grossMarginQ4` | number | | 最早季度毛利率 |
 | `netMargin` | number | | 净利率，填百分比数值 |
 | `nonGaapNetMargin` | number | | 扣非Net Margin / Non-GAAP 净利率 TTM，填百分比数值 |
-| `netIncomeQ1` | number | | 最新季度净利润，单位自定（如 亿元、百万美元） |
-| `netIncomeQ2` | number | | 上季度净利润 |
-| `netIncomeQ3` | number | | 再上季度净利润 |
-| `netIncomeQ4` | number | | 最早季度净利润 |
+| `netMarginQ1` | number | | 最新季度净利率（百分比），Q1-Q4 的平均值显示为「净利率(季均)」 |
+| `netMarginQ2` | number | | 上季度净利率 |
+| `netMarginQ3` | number | | 再上季度净利率 |
+| `netMarginQ4` | number | | 最早季度净利率 |
 | `notes` | string | | 备注 |
 
 ---

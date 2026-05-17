@@ -330,6 +330,10 @@ export interface ValuationSnapshot {
   ntmPe?: number | null;
   ntmPs?: number | null;
   grossMargin?: number | null;
+  grossMarginQ1?: number | null;
+  grossMarginQ2?: number | null;
+  grossMarginQ3?: number | null;
+  grossMarginQ4?: number | null;
   netMargin?: number | null;
   nonGaapNetMargin?: number | null;
   netMarginQ1?: number | null;

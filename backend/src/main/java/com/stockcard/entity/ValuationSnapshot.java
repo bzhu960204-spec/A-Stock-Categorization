@@ -44,6 +44,12 @@ public class ValuationSnapshot {
     /** 毛利率（百分比，如 45.2 表示 45.2%） */
     private Double grossMargin;
 
+    /** 过去四季度毛利率（Q1=最新季度，Q4=最早），百分比，如 45.2 表示 45.2% */
+    private Double grossMarginQ1;
+    private Double grossMarginQ2;
+    private Double grossMarginQ3;
+    private Double grossMarginQ4;
+
     /** 净利率（百分比） */
     private Double netMargin;
 

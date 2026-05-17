@@ -18,6 +18,8 @@ interface MetricDef {
   label: string;
   isPercent: boolean;
   lowIsBetter: boolean;
+  computeValue?: (s: ValuationSnapshot) => number | null;
+  renderCellContent?: (s: ValuationSnapshot) => React.ReactNode;
 }
 
 const METRICS: MetricDef[] = [
@@ -25,13 +27,41 @@ const METRICS: MetricDef[] = [
   { key: 'ps',          label: 'PS',      isPercent: false, lowIsBetter: true  },
   { key: 'ntmPe',       label: 'NTM PE',  isPercent: false, lowIsBetter: true  },
   { key: 'ntmPs',       label: 'NTM PS',  isPercent: false, lowIsBetter: true  },
-  { key: 'grossMargin',       label: '毛利率',          isPercent: true,  lowIsBetter: false },
+  {
+    key: 'grossMargin',
+    label: '毛利率',
+    isPercent: true,
+    lowIsBetter: false,
+    computeValue: (s) => avgGrossMargin(s),
+    renderCellContent: (s) => {
+      const avg = avgGrossMargin(s);
+      if (avg == null) return fmtNum(s.grossMargin, true);
+      return (
+        <span className="val-ni-avg">
+          {fmtNum(avg, true)}
+          <span className="val-ni-tip">
+            <span>Q1 (最早): {fmtNum(s.grossMarginQ1, true)}</span>
+            <span>Q2: {fmtNum(s.grossMarginQ2, true)}</span>
+            <span>Q3: {fmtNum(s.grossMarginQ3, true)}</span>
+            <span>Q4 (最新): {fmtNum(s.grossMarginQ4, true)}</span>
+          </span>
+        </span>
+      );
+    },
+  },
   { key: 'nonGaapNetMargin',  label: 'Non-GAAP 净利率', isPercent: true,  lowIsBetter: false },
 ];
 
 function fmtNum(v: number | null | undefined, isPercent = false): string {
   if (v == null) return '—';
-  return isPercent ? `${v.toFixed(1)}%` : v.toFixed(1);
+  return isPercent ? `${(v * 100).toFixed(1)}%` : v.toFixed(1);
+}
+
+function avgGrossMargin(s: ValuationSnapshot): number | null {
+  const vals = [s.grossMarginQ1, s.grossMarginQ2, s.grossMarginQ3, s.grossMarginQ4]
+    .filter((v): v is number => v != null);
+  if (vals.length === 0) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
 }
 
 function avgNetIncome(s: ValuationSnapshot): number | null {
@@ -51,6 +81,10 @@ function emptyForm(): Omit<ValuationSnapshot, 'id' | 'createdAt'> {
     ntmPe: undefined,
     ntmPs: undefined,
     grossMargin: undefined,
+    grossMarginQ1: undefined,
+    grossMarginQ2: undefined,
+    grossMarginQ3: undefined,
+    grossMarginQ4: undefined,
     netMargin: undefined,
     nonGaapNetMargin: undefined,
     netMarginQ1: undefined,
@@ -92,12 +126,12 @@ export default function ValuationModule({ onGoHome }: Props) {
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState<'add' | 'update'>('add');
 
-  type SortKey = 'snapshotDate' | 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin';
+  type SortKey = 'snapshotDate' | 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin' | 'avgGrossMargin';
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   // Filter state
-  type FilterKey = 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin';
+  type FilterKey = 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin' | 'avgGrossMargin';
   type FilterOp = '>' | '<' | '>=' | '<=' | '=';
   interface FilterRule { id: number; key: FilterKey; op: FilterOp; value: string; }
   const FILTER_KEYS: { key: FilterKey; label: string }[] = [
@@ -106,6 +140,7 @@ export default function ValuationModule({ onGoHome }: Props) {
     { key: 'ntmPe',            label: 'NTM PE'           },
     { key: 'ntmPs',            label: 'NTM PS'           },
     { key: 'grossMargin',      label: '毛利率 %'         },
+    { key: 'avgGrossMargin',   label: '毛利率(季均) %'     },
     { key: 'nonGaapNetMargin', label: 'Non-GAAP 净利率 %' },
     { key: 'avgMargin',        label: '净利率(季均) %'     },
   ];
@@ -174,7 +209,13 @@ export default function ValuationModule({ onGoHome }: Props) {
 
   // Apply filter rules
   function getFilterVal(s: ValuationSnapshot, key: string): number | null {
-    if (key === 'avgMargin') return avgNetIncome(s);
+    // Margin fields are stored as decimals (0.786); multiply by 100 so filter values work as percentages (78.6)
+    if (key === 'avgMargin') { const v = avgNetIncome(s); return v != null ? v * 100 : null; }
+    if (key === 'avgGrossMargin') { const v = avgGrossMargin(s); return v != null ? v * 100 : null; }
+    if (key === 'grossMargin' || key === 'nonGaapNetMargin') {
+      const v = (s[key as keyof ValuationSnapshot] as number | null | undefined) ?? null;
+      return v != null ? v * 100 : null;
+    }
     return (s[key as keyof ValuationSnapshot] as number | null | undefined) ?? null;
   }
   function testFilter(s: ValuationSnapshot, f: { key: string; op: string; value: string }): boolean {
@@ -203,6 +244,9 @@ export default function ValuationModule({ onGoHome }: Props) {
         if (sortKey === 'avgMargin') {
           av = avgNetIncome(a);
           bv = avgNetIncome(b);
+        } else if (sortKey === 'avgGrossMargin') {
+          av = avgGrossMargin(a);
+          bv = avgGrossMargin(b);
         } else if (sortKey === 'snapshotDate') {
           av = a.snapshotDate ? new Date(a.snapshotDate).getTime() : null;
           bv = b.snapshotDate ? new Date(b.snapshotDate).getTime() : null;
@@ -258,6 +302,10 @@ export default function ValuationModule({ onGoHome }: Props) {
       ntmPe: s.ntmPe,
       ntmPs: s.ntmPs,
       grossMargin: s.grossMargin,
+      grossMarginQ1: s.grossMarginQ1,
+      grossMarginQ2: s.grossMarginQ2,
+      grossMarginQ3: s.grossMarginQ3,
+      grossMarginQ4: s.grossMarginQ4,
       netMargin: s.netMargin,
       nonGaapNetMargin: s.nonGaapNetMargin,
       netMarginQ1: s.netMarginQ1,
@@ -318,6 +366,12 @@ export default function ValuationModule({ onGoHome }: Props) {
     }
     setImporting(true);
     const today = new Date().toISOString().slice(0, 10);
+    // Margin fields are stored as-is (decimal form, e.g. 0.786 = 78.6%); display layer multiplies by 100
+    function toNum(v: unknown): number | undefined {
+      if (v == null) return undefined;
+      const n = Number(v);
+      return isNaN(n) ? undefined : n;
+    }
     try {
       for (const it of items as Record<string, unknown>[]) {
         const ticker = String(it.ticker).toUpperCase();
@@ -325,17 +379,21 @@ export default function ValuationModule({ onGoHome }: Props) {
           ticker,
           companyName: String(it.companyName),
           snapshotDate: it.snapshotDate ? String(it.snapshotDate) : today,
-          pe: it.pe != null ? Number(it.pe) : undefined,
-          ps: it.ps != null ? Number(it.ps) : undefined,
-          ntmPe: it.ntmPe != null ? Number(it.ntmPe) : undefined,
-          ntmPs: it.ntmPs != null ? Number(it.ntmPs) : undefined,
-          grossMargin: it.grossMargin != null ? Number(it.grossMargin) : undefined,
-          netMargin: it.netMargin != null ? Number(it.netMargin) : undefined,
-          nonGaapNetMargin: it.nonGaapNetMargin != null ? Number(it.nonGaapNetMargin) : undefined,
-          netMarginQ1: it.netMarginQ1 != null ? Number(it.netMarginQ1) : undefined,
-          netMarginQ2: it.netMarginQ2 != null ? Number(it.netMarginQ2) : undefined,
-          netMarginQ3: it.netMarginQ3 != null ? Number(it.netMarginQ3) : undefined,
-          netMarginQ4: it.netMarginQ4 != null ? Number(it.netMarginQ4) : undefined,
+          pe: toNum(it.pe),
+          ps: toNum(it.ps),
+          ntmPe: toNum(it.ntmPe),
+          ntmPs: toNum(it.ntmPs),
+          grossMargin: toNum(it.grossMargin),
+          grossMarginQ1: toNum(it.grossMarginQ1),
+          grossMarginQ2: toNum(it.grossMarginQ2),
+          grossMarginQ3: toNum(it.grossMarginQ3),
+          grossMarginQ4: toNum(it.grossMarginQ4),
+          netMargin: toNum(it.netMargin),
+          nonGaapNetMargin: toNum(it.nonGaapNetMargin),
+          netMarginQ1: toNum(it.netMarginQ1),
+          netMarginQ2: toNum(it.netMarginQ2),
+          netMarginQ3: toNum(it.netMarginQ3),
+          netMarginQ4: toNum(it.netMarginQ4),
           notes: it.notes != null ? String(it.notes) : '',
         };
 
@@ -346,17 +404,21 @@ export default function ValuationModule({ onGoHome }: Props) {
             await updateValuationSnapshot(existing.id, {
               ...payload,
               snapshotDate: it.snapshotDate ? String(it.snapshotDate) : today,
-              pe:             it.pe             != null ? Number(it.pe)             : existing.pe             ?? undefined,
-              ps:             it.ps             != null ? Number(it.ps)             : existing.ps             ?? undefined,
-              ntmPe:          it.ntmPe          != null ? Number(it.ntmPe)          : existing.ntmPe          ?? undefined,
-              ntmPs:          it.ntmPs          != null ? Number(it.ntmPs)          : existing.ntmPs          ?? undefined,
-              grossMargin:    it.grossMargin    != null ? Number(it.grossMargin)    : existing.grossMargin    ?? undefined,
-              netMargin:      it.netMargin      != null ? Number(it.netMargin)      : existing.netMargin      ?? undefined,
-              nonGaapNetMargin: it.nonGaapNetMargin != null ? Number(it.nonGaapNetMargin) : existing.nonGaapNetMargin ?? undefined,
-              netMarginQ1:    it.netMarginQ1    != null ? Number(it.netMarginQ1)    : existing.netMarginQ1    ?? undefined,
-              netMarginQ2:    it.netMarginQ2    != null ? Number(it.netMarginQ2)    : existing.netMarginQ2    ?? undefined,
-              netMarginQ3:    it.netMarginQ3    != null ? Number(it.netMarginQ3)    : existing.netMarginQ3    ?? undefined,
-              netMarginQ4:    it.netMarginQ4    != null ? Number(it.netMarginQ4)    : existing.netMarginQ4    ?? undefined,
+              pe:               it.pe               != null ? toNum(it.pe)!               : existing.pe               ?? undefined,
+              ps:               it.ps               != null ? toNum(it.ps)!               : existing.ps               ?? undefined,
+              ntmPe:            it.ntmPe             != null ? toNum(it.ntmPe)!            : existing.ntmPe             ?? undefined,
+              ntmPs:            it.ntmPs             != null ? toNum(it.ntmPs)!            : existing.ntmPs             ?? undefined,
+              grossMargin:      it.grossMargin       != null ? toNum(it.grossMargin)!      : existing.grossMargin       ?? undefined,
+              grossMarginQ1:    it.grossMarginQ1     != null ? toNum(it.grossMarginQ1)!    : existing.grossMarginQ1     ?? undefined,
+              grossMarginQ2:    it.grossMarginQ2     != null ? toNum(it.grossMarginQ2)!    : existing.grossMarginQ2     ?? undefined,
+              grossMarginQ3:    it.grossMarginQ3     != null ? toNum(it.grossMarginQ3)!    : existing.grossMarginQ3     ?? undefined,
+              grossMarginQ4:    it.grossMarginQ4     != null ? toNum(it.grossMarginQ4)!    : existing.grossMarginQ4     ?? undefined,
+              netMargin:        it.netMargin         != null ? toNum(it.netMargin)!        : existing.netMargin         ?? undefined,
+              nonGaapNetMargin: it.nonGaapNetMargin  != null ? toNum(it.nonGaapNetMargin)! : existing.nonGaapNetMargin  ?? undefined,
+              netMarginQ1:      it.netMarginQ1       != null ? toNum(it.netMarginQ1)!      : existing.netMarginQ1       ?? undefined,
+              netMarginQ2:      it.netMarginQ2       != null ? toNum(it.netMarginQ2)!      : existing.netMarginQ2       ?? undefined,
+              netMarginQ3:      it.netMarginQ3       != null ? toNum(it.netMarginQ3)!      : existing.netMarginQ3       ?? undefined,
+              netMarginQ4:      it.netMarginQ4       != null ? toNum(it.netMarginQ4)!      : existing.netMarginQ4       ?? undefined,
               notes: it.notes != null && String(it.notes) !== '' ? String(it.notes) : existing.notes ?? '',
             });
           } else {
@@ -412,12 +474,12 @@ export default function ValuationModule({ onGoHome }: Props) {
   }
 
   // Highlight the best value in a column across compared companies
-  function getBestValue(key: keyof ValuationSnapshot, lowIsBetter: boolean): number | null {
+  function getBestValue(m: MetricDef): number | null {
     const vals = compareSnapshots
-      .map(s => s[key] as number | null | undefined)
+      .map(s => m.computeValue ? m.computeValue(s) : (s[m.key] as number | null | undefined) ?? null)
       .filter((v): v is number => v != null);
     if (vals.length < 2) return null; // only highlight when comparing ≥2
-    return lowIsBetter ? Math.min(...vals) : Math.max(...vals);
+    return m.lowIsBetter ? Math.min(...vals) : Math.max(...vals);
   }
 
   // Number field helper
@@ -446,6 +508,10 @@ export default function ValuationModule({ onGoHome }: Props) {
       ntmPe: null,
       ntmPs: null,
       grossMargin: null,
+      grossMarginQ1: null,
+      grossMarginQ2: null,
+      grossMarginQ3: null,
+      grossMarginQ4: null,
       netMargin: null,
       nonGaapNetMargin: null,
       netMarginQ1: null,
@@ -583,7 +649,7 @@ export default function ValuationModule({ onGoHome }: Props) {
                     <th className="val-th-sort" onClick={() => handleSort('ps')}>PS{sortIcon('ps')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('ntmPe')}>NTM PE{sortIcon('ntmPe')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('ntmPs')}>NTM PS{sortIcon('ntmPs')}</th>
-                    <th className="val-th-sort" onClick={() => handleSort('grossMargin')}>毛利率{sortIcon('grossMargin')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('avgGrossMargin')}>毛利率(季均){sortIcon('avgGrossMargin')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('nonGaapNetMargin')}>Non-GAAP 净利率{sortIcon('nonGaapNetMargin')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('avgMargin')}>净利率(季均){sortIcon('avgMargin')}</th>
                     <th style={{ width: 80 }}></th>
@@ -608,7 +674,23 @@ export default function ValuationModule({ onGoHome }: Props) {
                       <td className="val-num">{fmtNum(s.ps)}</td>
                       <td className="val-num">{fmtNum(s.ntmPe)}</td>
                       <td className="val-num">{fmtNum(s.ntmPs)}</td>
-                      <td className="val-num">{fmtNum(s.grossMargin, true)}</td>
+                      <td className="val-num">
+                        {(() => {
+                          const avg = avgGrossMargin(s);
+                          if (avg == null) return fmtNum(s.grossMargin, true);
+                          return (
+                            <span className="val-ni-avg">
+                              {fmtNum(avg, true)}
+                              <span className="val-ni-tip">
+                                <span>Q1 (最早): {fmtNum(s.grossMarginQ1, true)}</span>
+                                <span>Q2: {fmtNum(s.grossMarginQ2, true)}</span>
+                                <span>Q3: {fmtNum(s.grossMarginQ3, true)}</span>
+                                <span>Q4 (最新): {fmtNum(s.grossMarginQ4, true)}</span>
+                              </span>
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className="val-num">{fmtNum(s.nonGaapNetMargin, true)}</td>
                       <td className="val-num">
                         {(() => {
@@ -618,10 +700,10 @@ export default function ValuationModule({ onGoHome }: Props) {
                             <span className="val-ni-avg">
                               {fmtNum(avg, true)}
                               <span className="val-ni-tip">
-                                <span>Q1 (最新): {fmtNum(s.netMarginQ1, true)}</span>
+                                <span>Q1 (最早): {fmtNum(s.netMarginQ1, true)}</span>
                                 <span>Q2: {fmtNum(s.netMarginQ2, true)}</span>
                                 <span>Q3: {fmtNum(s.netMarginQ3, true)}</span>
-                                <span>Q4 (最早): {fmtNum(s.netMarginQ4, true)}</span>
+                                <span>Q4 (最新): {fmtNum(s.netMarginQ4, true)}</span>
                               </span>
                             </span>
                           );
@@ -705,19 +787,19 @@ export default function ValuationModule({ onGoHome }: Props) {
                   </thead>
                   <tbody>
                     {METRICS.map(m => {
-                      const best = getBestValue(m.key, m.lowIsBetter);
+                      const best = getBestValue(m);
                       return (
                         <tr key={m.key}>
                           <td className="val-cmp-metric-label">{m.label}</td>
                           {compareSnapshots.map(s => {
-                            const raw = s[m.key] as number | null | undefined;
-                            const isBest = raw != null && raw === best;
+                            const val = m.computeValue ? m.computeValue(s) : (s[m.key] as number | null | undefined) ?? null;
+                            const isBest = val != null && val === best;
                             return (
                               <td
                                 key={s.ticker}
                                 className={`val-cmp-cell${isBest ? ' best' : ''}`}
                               >
-                                {fmtNum(raw, m.isPercent)}
+                                {m.renderCellContent ? m.renderCellContent(s) : fmtNum(val, m.isPercent)}
                               </td>
                             );
                           })}
@@ -764,6 +846,33 @@ export default function ValuationModule({ onGoHome }: Props) {
               ))}
             </div>
 
+            {/* Quarterly gross margin */}
+            {[detailSnapshot.grossMarginQ1, detailSnapshot.grossMarginQ2,
+              detailSnapshot.grossMarginQ3, detailSnapshot.grossMarginQ4].some(v => v != null) && (
+              <div className="val-detail-section">
+                <div className="val-detail-section-title">过去四季度毛利率</div>
+                <div className="val-detail-quarters">
+                  {[
+                    { label: 'Q1（最早）', val: detailSnapshot.grossMarginQ1 },
+                    { label: 'Q2',        val: detailSnapshot.grossMarginQ2 },
+                    { label: 'Q3',        val: detailSnapshot.grossMarginQ3 },
+                    { label: 'Q4（最新）', val: detailSnapshot.grossMarginQ4 },
+                  ].map(q => (
+                    <div key={q.label} className="val-detail-quarter">
+                      <div className="val-detail-quarter-label">{q.label}</div>
+                      <div className="val-detail-quarter-value">{fmtNum(q.val, true)}</div>
+                    </div>
+                  ))}
+                  <div className="val-detail-quarter val-detail-quarter-avg">
+                    <div className="val-detail-quarter-label">季均</div>
+                    <div className="val-detail-quarter-value">
+                      {fmtNum(avgGrossMargin(detailSnapshot), true)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Quarterly net margin */}
             {[detailSnapshot.netMarginQ1, detailSnapshot.netMarginQ2,
               detailSnapshot.netMarginQ3, detailSnapshot.netMarginQ4].some(v => v != null) && (
@@ -771,10 +880,10 @@ export default function ValuationModule({ onGoHome }: Props) {
                 <div className="val-detail-section-title">过去四季度净利率</div>
                 <div className="val-detail-quarters">
                   {[
-                    { label: 'Q1（最新）', val: detailSnapshot.netMarginQ1 },
+                    { label: 'Q1（最早）', val: detailSnapshot.netMarginQ1 },
                     { label: 'Q2',        val: detailSnapshot.netMarginQ2 },
                     { label: 'Q3',        val: detailSnapshot.netMarginQ3 },
-                    { label: 'Q4（最早）', val: detailSnapshot.netMarginQ4 },
+                    { label: 'Q4（最新）', val: detailSnapshot.netMarginQ4 },
                   ].map(q => (
                     <div key={q.label} className="val-detail-quarter">
                       <div className="val-detail-quarter-label">{q.label}</div>
@@ -851,13 +960,17 @@ export default function ValuationModule({ onGoHome }: Props) {
     "ps": 7.2,
     "ntmPe": 25.0,
     "ntmPs": 6.8,
-    "grossMargin": 46.2,
-    "netMargin": 24.1,
-    "nonGaapNetMargin": 26.3,
-    "netMarginQ1": 25.1,
-    "netMarginQ2": 24.8,
-    "netMarginQ3": 25.9,
-    "netMarginQ4": 20.6,
+    "grossMargin": 0.462,
+    "grossMarginQ1": 0.465,
+    "grossMarginQ2": 0.461,
+    "grossMarginQ3": 0.458,
+    "grossMarginQ4": 0.464,
+    "netMargin": 0.241,
+    "nonGaapNetMargin": 0.263,
+    "netMarginQ1": 0.251,
+    "netMarginQ2": 0.248,
+    "netMarginQ3": 0.259,
+    "netMarginQ4": 0.206,
     "notes": "可选备注"
   }
 ]`}</pre>
@@ -976,19 +1089,69 @@ export default function ValuationModule({ onGoHome }: Props) {
                 <input
                   className="val-form-input"
                   type="number"
-                  step="0.1"
-                  placeholder="如 45.2"
+                  step="0.001"
+                  placeholder="如 0.786"
                   value={numValue('grossMargin')}
                   onChange={numChange('grossMargin')}
                 />
               </div>
+
+              {/* Quarterly gross margin */}
+              <div className="val-form-group full val-form-section-label">
+                过去四季度毛利率 %（Q1 = 最早季度）
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q1 毛利率 %（最早）</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder="最近一个季度"
+                  value={numValue('grossMarginQ1')}
+                  onChange={numChange('grossMarginQ1')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q2 毛利率 %</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder=""
+                  value={numValue('grossMarginQ2')}
+                  onChange={numChange('grossMarginQ2')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q3 毛利率 %</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder=""
+                  value={numValue('grossMarginQ3')}
+                  onChange={numChange('grossMarginQ3')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Q4 毛利率 %（最新）</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder=""
+                  value={numValue('grossMarginQ4')}
+                  onChange={numChange('grossMarginQ4')}
+                />
+              </div>
+
               <div className="val-form-group">
                 <label className="val-form-label">净利率 %</label>
                 <input
                   className="val-form-input"
                   type="number"
-                  step="0.1"
-                  placeholder="如 24.1"
+                  step="0.001"
+                  placeholder="如 0.241"
                   value={numValue('netMargin')}
                   onChange={numChange('netMargin')}
                 />
@@ -998,8 +1161,8 @@ export default function ValuationModule({ onGoHome }: Props) {
                 <input
                   className="val-form-input"
                   type="number"
-                  step="0.1"
-                  placeholder="扣非净利润率 TTM"
+                  step="0.001"
+                  placeholder="如 0.263，扣非 TTM"
                   value={numValue('nonGaapNetMargin')}
                   onChange={numChange('nonGaapNetMargin')}
                 />
@@ -1007,10 +1170,10 @@ export default function ValuationModule({ onGoHome }: Props) {
 
               {/* Quarterly net margin */}
               <div className="val-form-group full val-form-section-label">
-                过去四季度净利率 %（Q1 = 最新季度）
+                过去四季度净利率 %（Q1 = 最早季度）
               </div>
               <div className="val-form-group">
-                <label className="val-form-label">Q1 净利率 %（最新）</label>
+                <label className="val-form-label">Q1 净利率 %（最早）</label>
                 <input
                   className="val-form-input"
                   type="number"
@@ -1043,7 +1206,7 @@ export default function ValuationModule({ onGoHome }: Props) {
                 />
               </div>
               <div className="val-form-group">
-                <label className="val-form-label">Q4 净利率 %（最早）</label>
+                <label className="val-form-label">Q4 净利率 %（最新）</label>
                 <input
                   className="val-form-input"
                   type="number"
