@@ -6413,24 +6413,20 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
   font-size: 0.82rem;
 }
 
-/* ── Quarterly net income tooltip ───────────────────────────────── */
+/* ── Quarterly margin tooltip (fixed position) ───────────────────── */
 .val-ni-avg {
-  position: relative;
   cursor: help;
   border-bottom: 1px dashed var(--text-muted);
   display: inline-block;
 }
-.val-ni-tip {
-  display: none;
-  position: absolute;
-  right: 0;
-  top: calc(100% + 5px);
+.val-ni-tip-fixed {
+  position: fixed;
   background: var(--panel-bg);
   border: 1px solid var(--border-mid);
   border-radius: 6px;
   padding: 8px 14px;
   white-space: nowrap;
-  z-index: 200;
+  z-index: 9999;
   text-align: left;
   color: var(--text-secondary);
   box-shadow: 0 6px 20px rgba(0,0,0,0.35);
@@ -6439,16 +6435,16 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
   line-height: 1;
   min-width: 170px;
   pointer-events: none;
+  display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.val-ni-tip span {
+.val-ni-tip-fixed span {
   display: block;
   padding: 3px 0;
   border-bottom: 1px solid var(--border);
 }
-.val-ni-tip span:last-child { border-bottom: none; }
-.val-ni-avg:hover .val-ni-tip { display: flex; }
+.val-ni-tip-fixed span:last-child { border-bottom: none; }
 
 /* ── Form section label ─────────────────────────────────────────── */
 .val-form-section-label {
@@ -6461,43 +6457,6 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
   border-top: 1px solid var(--border);
   margin-top: 2px;
 }
-
-/* ── Quarterly net income tooltip ───────────────────────────────── */
-.val-ni-avg {
-  position: relative;
-  cursor: help;
-  border-bottom: 1px dashed var(--text-muted);
-  display: inline-block;
-}
-.val-ni-tip {
-  display: none;
-  position: absolute;
-  right: 0;
-  top: calc(100% + 5px);
-  background: var(--panel-bg);
-  border: 1px solid var(--border-mid);
-  border-radius: 6px;
-  padding: 8px 14px;
-  white-space: nowrap;
-  z-index: 200;
-  text-align: left;
-  color: var(--text-secondary);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.35);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.78rem;
-  line-height: 1;
-  min-width: 170px;
-  pointer-events: none;
-  flex-direction: column;
-  gap: 6px;
-}
-.val-ni-tip span {
-  display: block;
-  padding: 3px 0;
-  border-bottom: 1px solid var(--border);
-}
-.val-ni-tip span:last-child { border-bottom: none; }
-.val-ni-avg:hover .val-ni-tip { display: flex; }
 
 /* ── Form section label ─────────────────────────────────────────── */
 .val-form-section-label {

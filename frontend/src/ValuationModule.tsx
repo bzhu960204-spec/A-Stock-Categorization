@@ -19,7 +19,6 @@ interface MetricDef {
   isPercent: boolean;
   lowIsBetter: boolean;
   computeValue?: (s: ValuationSnapshot) => number | null;
-  renderCellContent?: (s: ValuationSnapshot) => React.ReactNode;
 }
 
 const METRICS: MetricDef[] = [
@@ -27,28 +26,7 @@ const METRICS: MetricDef[] = [
   { key: 'ps',          label: 'PS',      isPercent: false, lowIsBetter: true  },
   { key: 'ntmPe',       label: 'NTM PE',  isPercent: false, lowIsBetter: true  },
   { key: 'ntmPs',       label: 'NTM PS',  isPercent: false, lowIsBetter: true  },
-  {
-    key: 'grossMargin',
-    label: '毛利率',
-    isPercent: true,
-    lowIsBetter: false,
-    computeValue: (s) => avgGrossMargin(s),
-    renderCellContent: (s) => {
-      const avg = avgGrossMargin(s);
-      if (avg == null) return fmtNum(s.grossMargin, true);
-      return (
-        <span className="val-ni-avg">
-          {fmtNum(avg, true)}
-          <span className="val-ni-tip">
-            <span>Q1 (最早): {fmtNum(s.grossMarginQ1, true)}</span>
-            <span>Q2: {fmtNum(s.grossMarginQ2, true)}</span>
-            <span>Q3: {fmtNum(s.grossMarginQ3, true)}</span>
-            <span>Q4 (最新): {fmtNum(s.grossMarginQ4, true)}</span>
-          </span>
-        </span>
-      );
-    },
-  },
+  { key: 'grossMargin', label: '毛利率',          isPercent: true,  lowIsBetter: false, computeValue: avgGrossMargin },
   { key: 'nonGaapNetMargin',  label: 'Non-GAAP 净利率', isPercent: true,  lowIsBetter: false },
 ];
 
@@ -125,6 +103,16 @@ export default function ValuationModule({ onGoHome }: Props) {
   const [importError, setImportError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState<'add' | 'update'>('add');
+
+  // Tooltip state
+  type TipLine = { label: string; value: string };
+  const [avgTip, setAvgTip] = useState<{ lines: TipLine[]; x: number; y: number; above: boolean } | null>(null);
+  function openTip(e: React.MouseEvent<HTMLElement>, lines: TipLine[]) {
+    const r = e.currentTarget.getBoundingClientRect();
+    const above = r.bottom > window.innerHeight * 0.55;
+    setAvgTip({ lines, x: r.right + 8, y: above ? r.top : r.bottom + 4, above });
+  }
+  function closeTip() { setAvgTip(null); }
 
   type SortKey = 'snapshotDate' | 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin' | 'avgGrossMargin';
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
@@ -679,15 +667,15 @@ export default function ValuationModule({ onGoHome }: Props) {
                           const avg = avgGrossMargin(s);
                           if (avg == null) return fmtNum(s.grossMargin, true);
                           return (
-                            <span className="val-ni-avg">
-                              {fmtNum(avg, true)}
-                              <span className="val-ni-tip">
-                                <span>Q1 (最早): {fmtNum(s.grossMarginQ1, true)}</span>
-                                <span>Q2: {fmtNum(s.grossMarginQ2, true)}</span>
-                                <span>Q3: {fmtNum(s.grossMarginQ3, true)}</span>
-                                <span>Q4 (最新): {fmtNum(s.grossMarginQ4, true)}</span>
-                              </span>
-                            </span>
+                            <span className="val-ni-avg"
+                              onMouseEnter={e => openTip(e, [
+                                { label: 'Q1 (最早)', value: fmtNum(s.grossMarginQ1, true) },
+                                { label: 'Q2', value: fmtNum(s.grossMarginQ2, true) },
+                                { label: 'Q3', value: fmtNum(s.grossMarginQ3, true) },
+                                { label: 'Q4 (最新)', value: fmtNum(s.grossMarginQ4, true) },
+                              ])}
+                              onMouseLeave={closeTip}
+                            >{fmtNum(avg, true)}</span>
                           );
                         })()}
                       </td>
@@ -697,15 +685,15 @@ export default function ValuationModule({ onGoHome }: Props) {
                           const avg = avgNetIncome(s);
                           if (avg == null) return '—';
                           return (
-                            <span className="val-ni-avg">
-                              {fmtNum(avg, true)}
-                              <span className="val-ni-tip">
-                                <span>Q1 (最早): {fmtNum(s.netMarginQ1, true)}</span>
-                                <span>Q2: {fmtNum(s.netMarginQ2, true)}</span>
-                                <span>Q3: {fmtNum(s.netMarginQ3, true)}</span>
-                                <span>Q4 (最新): {fmtNum(s.netMarginQ4, true)}</span>
-                              </span>
-                            </span>
+                            <span className="val-ni-avg"
+                              onMouseEnter={e => openTip(e, [
+                                { label: 'Q1 (最早)', value: fmtNum(s.netMarginQ1, true) },
+                                { label: 'Q2', value: fmtNum(s.netMarginQ2, true) },
+                                { label: 'Q3', value: fmtNum(s.netMarginQ3, true) },
+                                { label: 'Q4 (最新)', value: fmtNum(s.netMarginQ4, true) },
+                              ])}
+                              onMouseLeave={closeTip}
+                            >{fmtNum(avg, true)}</span>
                           );
                         })()}
                       </td>
@@ -794,12 +782,27 @@ export default function ValuationModule({ onGoHome }: Props) {
                           {compareSnapshots.map(s => {
                             const val = m.computeValue ? m.computeValue(s) : (s[m.key] as number | null | undefined) ?? null;
                             const isBest = val != null && val === best;
+                            const cellContent = m.key === 'grossMargin' ? (() => {
+                              const avg = avgGrossMargin(s);
+                              if (avg == null) return fmtNum(s.grossMargin, true);
+                              return (
+                                <span className="val-ni-avg"
+                                  onMouseEnter={e => openTip(e, [
+                                    { label: 'Q1 (最早)', value: fmtNum(s.grossMarginQ1, true) },
+                                    { label: 'Q2', value: fmtNum(s.grossMarginQ2, true) },
+                                    { label: 'Q3', value: fmtNum(s.grossMarginQ3, true) },
+                                    { label: 'Q4 (最新)', value: fmtNum(s.grossMarginQ4, true) },
+                                  ])}
+                                  onMouseLeave={closeTip}
+                                >{fmtNum(avg, true)}</span>
+                              );
+                            })() : fmtNum(val, m.isPercent);
                             return (
                               <td
                                 key={s.ticker}
                                 className={`val-cmp-cell${isBest ? ' best' : ''}`}
                               >
-                                {m.renderCellContent ? m.renderCellContent(s) : fmtNum(val, m.isPercent)}
+                                {cellContent}
                               </td>
                             );
                           })}
@@ -1237,6 +1240,23 @@ export default function ValuationModule({ onGoHome }: Props) {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Fixed tooltip ───────────────────────────────────────────────── */}
+      {avgTip && (
+        <div
+          className="val-ni-tip-fixed"
+          style={{
+            left: avgTip.x,
+            ...(avgTip.above
+              ? { top: avgTip.y, transform: 'translateY(-100%)' }
+              : { top: avgTip.y }),
+          }}
+        >
+          {avgTip.lines.map(l => (
+            <span key={l.label}>{l.label}: {l.value}</span>
+          ))}
         </div>
       )}
     </div>
