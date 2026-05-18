@@ -4,6 +4,10 @@ frontend/dist/
 frontend/.env.local
 frontend/.env.*.local
 
+# ===== Root =====
+.env
+valuation-import-*.json
+
 # ===== Backend =====
 backend/target/
 

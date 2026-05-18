@@ -357,6 +357,64 @@ public class ImageController {
 
 ---
 
+## 估值快照 — 自动拉取数据
+
+点击估值比较页头部的 **「⟲ 拉取数据」** 按钮，可自动从外部数据源拉取最新数据并保存为快照。
+
+### 支持市场
+
+| 市场 | 数据源 | 需要 API Key |
+|------|--------|-------------|
+| 🇺🇸 美股 | FMP（主）→ Yahoo Finance（自动备用） | FMP Key 可选 |
+| 🇨🇳 A股 | 东方财富（东财接口） | 不需要 |
+
+### 美股拉取逻辑
+
+1. 优先使用 [Financial Modeling Prep (FMP)](https://financialmodelingprep.com/developer/docs)，在主页设置中配置 API Key
+2. 若 FMP 返回 403（免费套餐限制）或接口不可用，**自动回退到 Yahoo Finance**（完全免费、无需 Key）
+
+| FMP HTTP 状态 | 处理方式 |
+|--------------|---------|
+| 200 | 正常拉取 |
+| 401 | 报错：API Key 无效 |
+| 403 | 静默跳过该接口，关键接口失败时回退 Yahoo Finance |
+| 429 | 报错：今日免费额度（250次）已用完 |
+
+#### 各数据源字段覆盖对比
+
+| 字段 | FMP 免费 | Yahoo Finance（备用） |
+|------|----------|----------------------|
+| PE(TTM) | ✅ | ✅ |
+| PS(TTM) | ✅ | ✅ |
+| NTM PE | ⚠️ 需付费 | ✅（`forwardPE`） |
+| NTM PS | ⚠️ 需付费 | ❌ |
+| FCF 倍数 | ✅ | ✅（市值 / 年度FCF计算） |
+| Fwd FCF 倍数 | ⚠️ 需付费 | ❌ |
+| 毛利率/净利率（季度） | ✅ | ✅ |
+| ROIC 年度历史 | ✅ | ❌ |
+
+### A股拉取逻辑
+
+使用东方财富免费接口，无需注册或 API Key。
+
+- 输入 **6位数字代码**，如 `600519`、`000858`、`300750`
+- 上交所：6/9 开头；深交所：0/3 开头（自动判断）
+
+| 字段 | 是否支持 |
+|------|---------|
+| PE(TTM) / PS(TTM) / PCF | ✅ |
+| 毛利率/净利率（季度） | ✅ |
+| ROIC 年度历史（近4年年报） | ✅ |
+| NTM PE/PS（分析师预估） | ❌ 无免费来源 |
+
+### 单条记录刷新
+
+每行右侧的 **↻ 按钮** 可对单条记录重新拉取最新数据：
+- ticker 为 6位纯数字 → 走 A股（东方财富）
+- 其他 → 走美股（FMP → Yahoo Finance）
+
+---
+
 ## 估值快照 — JSON 批量导入格式
 
 点击估值比较页头部的 **「↑ 导入 JSON」** 按钮，粘贴符合以下格式的 JSON，即可批量导入估值快照。
@@ -373,17 +431,23 @@ public class ImageController {
     "ps": 7.2,
     "ntmPe": 25.0,
     "ntmPs": 6.8,
-    "grossMargin": 46.2,
-    "grossMarginQ1": 46.5,
-    "grossMarginQ2": 46.1,
-    "grossMarginQ3": 45.8,
-    "grossMarginQ4": 46.4,
-    "netMargin": 24.1,
-    "nonGaapNetMargin": 26.5,
-    "netMarginQ1": 25.1,
-    "netMarginQ2": 24.8,
-    "netMarginQ3": 25.9,
-    "netMarginQ4": 20.6,
+    "fcfMultiple": 32.0,
+    "fwdFcfMultiple": 28.5,
+    "grossMargin": 0.462,
+    "grossMarginQ1": 0.465,
+    "grossMarginQ2": 0.461,
+    "grossMarginQ3": 0.458,
+    "grossMarginQ4": 0.464,
+    "netMargin": 0.241,
+    "nonGaapNetMargin": 0.263,
+    "netMarginQ1": 0.251,
+    "netMarginQ2": 0.248,
+    "netMarginQ3": 0.259,
+    "netMarginQ4": 0.206,
+    "ttmRoicY1": 0.28,
+    "ttmRoicY2": 0.31,
+    "ttmRoicY3": 0.35,
+    "ttmRoicY4": 0.38,
     "notes": "可选备注，如数据来源、市场环境等"
   },
   {
@@ -392,17 +456,23 @@ public class ImageController {
     "snapshotDate": "2026-05-16",
     "pe": 35.0,
     "ps": 12.5,
-    "grossMargin": 69.8,
-    "grossMarginQ1": 70.1,
-    "grossMarginQ2": 69.5,
-    "grossMarginQ3": 69.8,
-    "grossMarginQ4": 70.0,
-    "netMargin": 35.2,
-    "nonGaapNetMargin": 38.1,
-    "netMarginQ1": 36.2,
-    "netMarginQ2": 34.5,
-    "netMarginQ3": 35.0,
-    "netMarginQ4": 35.1
+    "fcfMultiple": 40.0,
+    "fwdFcfMultiple": 35.0,
+    "grossMargin": 0.698,
+    "grossMarginQ1": 0.701,
+    "grossMarginQ2": 0.695,
+    "grossMarginQ3": 0.698,
+    "grossMarginQ4": 0.700,
+    "netMargin": 0.352,
+    "nonGaapNetMargin": 0.381,
+    "netMarginQ1": 0.362,
+    "netMarginQ2": 0.345,
+    "netMarginQ3": 0.350,
+    "netMarginQ4": 0.351,
+    "ttmRoicY1": 0.22,
+    "ttmRoicY2": 0.25,
+    "ttmRoicY3": 0.27,
+    "ttmRoicY4": 0.30
   }
 ]
 ```
@@ -420,17 +490,23 @@ public class ImageController {
 | `ps` | number | | 市销率（TTM） |
 | `ntmPe` | number | | 前瞻市盈率（NTM） |
 | `ntmPs` | number | | 前瞻市销率（NTM） |
-| `grossMargin` | number | | 毛利率，填百分比数值（如 `46.2` 表示 46.2%），为兼容旧数据保留 |
-| `grossMarginQ1` | number | | 最新季度毛利率（百分比），Q1-Q4 的平均值将显示为「毛利率(季均)」 |
-| `grossMarginQ2` | number | | 上季度毛利率 |
-| `grossMarginQ3` | number | | 再上季度毛利率 |
-| `grossMarginQ4` | number | | 最早季度毛利率 |
-| `netMargin` | number | | 净利率，填百分比数值 |
-| `nonGaapNetMargin` | number | | 扣非Net Margin / Non-GAAP 净利率 TTM，填百分比数值 |
-| `netMarginQ1` | number | | 最新季度净利率（百分比），Q1-Q4 的平均值显示为「净利率(季均)」 |
-| `netMarginQ2` | number | | 上季度净利率 |
-| `netMarginQ3` | number | | 再上季度净利率 |
-| `netMarginQ4` | number | | 最早季度净利率 |
+| `fcfMultiple` | number | | FCF 倍数（FCF Multiple） |
+| `fwdFcfMultiple` | number | | 前瞻 FCF 倍数（Forward FCF Multiple，页面简写 Fwd FCF Mul） |
+| `grossMargin` | number | | 毛利率，填**小数**形式（如 `0.462` 表示 46.2%），为兼容旧数据保留 |
+| `grossMarginQ1` | number | | 最早季度毛利率（小数），Q1–Q4 平均值显示为「毛利率(季均)」，悬停可查看四季明细 |
+| `grossMarginQ2` | number | | 季度毛利率（小数） |
+| `grossMarginQ3` | number | | 季度毛利率（小数） |
+| `grossMarginQ4` | number | | 最新季度毛利率（小数） |
+| `netMargin` | number | | 净利率，小数形式 |
+| `nonGaapNetMargin` | number | | 扣非净利率（Non-GAAP Net Margin TTM），小数形式，页面简写「NG 净利率」 |
+| `netMarginQ1` | number | | 最早季度净利率（小数），Q1–Q4 平均值显示为「净利率(季均)」 |
+| `netMarginQ2` | number | | 季度净利率（小数） |
+| `netMarginQ3` | number | | 季度净利率（小数） |
+| `netMarginQ4` | number | | 最新季度净利率（小数） |
+| `ttmRoicY1` | number | | 最早年 TTM ROIC（小数，如 `0.28` 表示 28%） |
+| `ttmRoicY2` | number | | 次早年 TTM ROIC（小数） |
+| `ttmRoicY3` | number | | 次新年 TTM ROIC（小数） |
+| `ttmRoicY4` | number | | **最新年** TTM ROIC（小数），表格中直接显示此值，悬停可查看 Y1–Y4 全部历史 |
 | `notes` | string | | 备注 |
 
 ---

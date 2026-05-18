@@ -22,12 +22,15 @@ interface MetricDef {
 }
 
 const METRICS: MetricDef[] = [
-  { key: 'pe',          label: 'PE',      isPercent: false, lowIsBetter: true  },
-  { key: 'ps',          label: 'PS',      isPercent: false, lowIsBetter: true  },
-  { key: 'ntmPe',       label: 'NTM PE',  isPercent: false, lowIsBetter: true  },
-  { key: 'ntmPs',       label: 'NTM PS',  isPercent: false, lowIsBetter: true  },
-  { key: 'grossMargin', label: '毛利率',          isPercent: true,  lowIsBetter: false, computeValue: avgGrossMargin },
-  { key: 'nonGaapNetMargin',  label: 'Non-GAAP 净利率', isPercent: true,  lowIsBetter: false },
+  { key: 'pe',             label: 'PE',           isPercent: false, lowIsBetter: true  },
+  { key: 'ps',             label: 'PS',           isPercent: false, lowIsBetter: true  },
+  { key: 'ntmPe',          label: 'NTM PE',       isPercent: false, lowIsBetter: true  },
+  { key: 'ntmPs',          label: 'NTM PS',       isPercent: false, lowIsBetter: true  },
+  { key: 'fcfMultiple',    label: 'FCF Mul',      isPercent: false, lowIsBetter: true  },
+  { key: 'fwdFcfMultiple', label: 'Fwd FCF Mul',  isPercent: false, lowIsBetter: true  },
+  { key: 'grossMargin',    label: '毛利率',        isPercent: true,  lowIsBetter: false, computeValue: avgGrossMargin },
+  { key: 'nonGaapNetMargin', label: 'NG 净利率', isPercent: true, lowIsBetter: false },
+  { key: 'ttmRoicY4',      label: 'TTM ROIC',     isPercent: true,  lowIsBetter: false },
 ];
 
 function fmtNum(v: number | null | undefined, isPercent = false): string {
@@ -58,6 +61,8 @@ function emptyForm(): Omit<ValuationSnapshot, 'id' | 'createdAt'> {
     ps: undefined,
     ntmPe: undefined,
     ntmPs: undefined,
+    fcfMultiple: undefined,
+    fwdFcfMultiple: undefined,
     grossMargin: undefined,
     grossMarginQ1: undefined,
     grossMarginQ2: undefined,
@@ -69,6 +74,10 @@ function emptyForm(): Omit<ValuationSnapshot, 'id' | 'createdAt'> {
     netMarginQ2: undefined,
     netMarginQ3: undefined,
     netMarginQ4: undefined,
+    ttmRoicY1: undefined,
+    ttmRoicY2: undefined,
+    ttmRoicY3: undefined,
+    ttmRoicY4: undefined,
     notes: '',
   };
 }
@@ -104,6 +113,8 @@ export default function ValuationModule({ onGoHome }: Props) {
   const [importing, setImporting] = useState(false);
   const [importMode, setImportMode] = useState<'add' | 'update'>('add');
 
+  // FMP Fetch state — removed
+
   // Tooltip state
   type TipLine = { label: string; value: string };
   const [avgTip, setAvgTip] = useState<{ lines: TipLine[]; x: number; y: number; above: boolean } | null>(null);
@@ -114,12 +125,12 @@ export default function ValuationModule({ onGoHome }: Props) {
   }
   function closeTip() { setAvgTip(null); }
 
-  type SortKey = 'snapshotDate' | 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin' | 'avgGrossMargin';
+  type SortKey = 'snapshotDate' | 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'fcfMultiple' | 'fwdFcfMultiple' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin' | 'avgGrossMargin' | 'ttmRoicY4';
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
   // Filter state
-  type FilterKey = 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin' | 'avgGrossMargin';
+  type FilterKey = 'pe' | 'ps' | 'ntmPe' | 'ntmPs' | 'fcfMultiple' | 'fwdFcfMultiple' | 'grossMargin' | 'nonGaapNetMargin' | 'avgMargin' | 'avgGrossMargin' | 'ttmRoicY4';
   type FilterOp = '>' | '<' | '>=' | '<=' | '=';
   interface FilterRule { id: number; key: FilterKey; op: FilterOp; value: string; }
   const FILTER_KEYS: { key: FilterKey; label: string }[] = [
@@ -127,10 +138,13 @@ export default function ValuationModule({ onGoHome }: Props) {
     { key: 'ps',               label: 'PS'               },
     { key: 'ntmPe',            label: 'NTM PE'           },
     { key: 'ntmPs',            label: 'NTM PS'           },
+    { key: 'fcfMultiple',      label: 'FCF Mul'          },
+    { key: 'fwdFcfMultiple',   label: 'Fwd FCF Mul'      },
     { key: 'grossMargin',      label: '毛利率 %'         },
-    { key: 'avgGrossMargin',   label: '毛利率(季均) %'     },
-    { key: 'nonGaapNetMargin', label: 'Non-GAAP 净利率 %' },
-    { key: 'avgMargin',        label: '净利率(季均) %'     },
+    { key: 'avgGrossMargin',   label: '毛利率(季均) %'   },
+    { key: 'nonGaapNetMargin', label: 'NG 净利率 %' },
+    { key: 'avgMargin',        label: '净利率(季均) %'   },
+    { key: 'ttmRoicY4',        label: 'TTM ROIC %'       },
   ];
   const [filters, setFilters] = useState<FilterRule[]>([]);
   const [filterLogic, setFilterLogic] = useState<'AND' | 'OR'>('AND');
@@ -202,6 +216,10 @@ export default function ValuationModule({ onGoHome }: Props) {
     if (key === 'avgGrossMargin') { const v = avgGrossMargin(s); return v != null ? v * 100 : null; }
     if (key === 'grossMargin' || key === 'nonGaapNetMargin') {
       const v = (s[key as keyof ValuationSnapshot] as number | null | undefined) ?? null;
+      return v != null ? v * 100 : null;
+    }
+    if (key === 'ttmRoicY4') {
+      const v = (s.ttmRoicY4 as number | null | undefined) ?? null;
       return v != null ? v * 100 : null;
     }
     return (s[key as keyof ValuationSnapshot] as number | null | undefined) ?? null;
@@ -289,6 +307,8 @@ export default function ValuationModule({ onGoHome }: Props) {
       ps: s.ps,
       ntmPe: s.ntmPe,
       ntmPs: s.ntmPs,
+      fcfMultiple: s.fcfMultiple,
+      fwdFcfMultiple: s.fwdFcfMultiple,
       grossMargin: s.grossMargin,
       grossMarginQ1: s.grossMarginQ1,
       grossMarginQ2: s.grossMarginQ2,
@@ -300,6 +320,10 @@ export default function ValuationModule({ onGoHome }: Props) {
       netMarginQ2: s.netMarginQ2,
       netMarginQ3: s.netMarginQ3,
       netMarginQ4: s.netMarginQ4,
+      ttmRoicY1: s.ttmRoicY1,
+      ttmRoicY2: s.ttmRoicY2,
+      ttmRoicY3: s.ttmRoicY3,
+      ttmRoicY4: s.ttmRoicY4,
       notes: s.notes ?? '',
     });
     setFormOpen(true);
@@ -371,6 +395,8 @@ export default function ValuationModule({ onGoHome }: Props) {
           ps: toNum(it.ps),
           ntmPe: toNum(it.ntmPe),
           ntmPs: toNum(it.ntmPs),
+          fcfMultiple: toNum(it.fcfMultiple),
+          fwdFcfMultiple: toNum(it.fwdFcfMultiple),
           grossMargin: toNum(it.grossMargin),
           grossMarginQ1: toNum(it.grossMarginQ1),
           grossMarginQ2: toNum(it.grossMarginQ2),
@@ -382,6 +408,10 @@ export default function ValuationModule({ onGoHome }: Props) {
           netMarginQ2: toNum(it.netMarginQ2),
           netMarginQ3: toNum(it.netMarginQ3),
           netMarginQ4: toNum(it.netMarginQ4),
+          ttmRoicY1: toNum(it.ttmRoicY1),
+          ttmRoicY2: toNum(it.ttmRoicY2),
+          ttmRoicY3: toNum(it.ttmRoicY3),
+          ttmRoicY4: toNum(it.ttmRoicY4),
           notes: it.notes != null ? String(it.notes) : '',
         };
 
@@ -396,6 +426,8 @@ export default function ValuationModule({ onGoHome }: Props) {
               ps:               it.ps               != null ? toNum(it.ps)!               : existing.ps               ?? undefined,
               ntmPe:            it.ntmPe             != null ? toNum(it.ntmPe)!            : existing.ntmPe             ?? undefined,
               ntmPs:            it.ntmPs             != null ? toNum(it.ntmPs)!            : existing.ntmPs             ?? undefined,
+              fcfMultiple:      it.fcfMultiple       != null ? toNum(it.fcfMultiple)!      : existing.fcfMultiple       ?? undefined,
+              fwdFcfMultiple:   it.fwdFcfMultiple    != null ? toNum(it.fwdFcfMultiple)!   : existing.fwdFcfMultiple    ?? undefined,
               grossMargin:      it.grossMargin       != null ? toNum(it.grossMargin)!      : existing.grossMargin       ?? undefined,
               grossMarginQ1:    it.grossMarginQ1     != null ? toNum(it.grossMarginQ1)!    : existing.grossMarginQ1     ?? undefined,
               grossMarginQ2:    it.grossMarginQ2     != null ? toNum(it.grossMarginQ2)!    : existing.grossMarginQ2     ?? undefined,
@@ -407,6 +439,10 @@ export default function ValuationModule({ onGoHome }: Props) {
               netMarginQ2:      it.netMarginQ2       != null ? toNum(it.netMarginQ2)!      : existing.netMarginQ2       ?? undefined,
               netMarginQ3:      it.netMarginQ3       != null ? toNum(it.netMarginQ3)!      : existing.netMarginQ3       ?? undefined,
               netMarginQ4:      it.netMarginQ4       != null ? toNum(it.netMarginQ4)!      : existing.netMarginQ4       ?? undefined,
+              ttmRoicY1:        it.ttmRoicY1         != null ? toNum(it.ttmRoicY1)!        : existing.ttmRoicY1         ?? undefined,
+              ttmRoicY2:        it.ttmRoicY2         != null ? toNum(it.ttmRoicY2)!        : existing.ttmRoicY2         ?? undefined,
+              ttmRoicY3:        it.ttmRoicY3         != null ? toNum(it.ttmRoicY3)!        : existing.ttmRoicY3         ?? undefined,
+              ttmRoicY4:        it.ttmRoicY4         != null ? toNum(it.ttmRoicY4)!        : existing.ttmRoicY4         ?? undefined,
               notes: it.notes != null && String(it.notes) !== '' ? String(it.notes) : existing.notes ?? '',
             });
           } else {
@@ -506,6 +542,12 @@ export default function ValuationModule({ onGoHome }: Props) {
       netMarginQ2: null,
       netMarginQ3: null,
       netMarginQ4: null,
+      fcfMultiple: null,
+      fwdFcfMultiple: null,
+      ttmRoicY1: null,
+      ttmRoicY2: null,
+      ttmRoicY3: null,
+      ttmRoicY4: null,
       notes: ''
     }));
     const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
@@ -632,21 +674,23 @@ export default function ValuationModule({ onGoHome }: Props) {
                   <tr>
                     <th className="val-th-sort" onClick={() => handleSort('snapshotDate')}>快照日期{sortIcon('snapshotDate')}</th>
                     <th>代码</th>
-                    <th>公司</th>
                     <th className="val-th-sort" onClick={() => handleSort('pe')}>PE{sortIcon('pe')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('ps')}>PS{sortIcon('ps')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('ntmPe')}>NTM PE{sortIcon('ntmPe')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('ntmPs')}>NTM PS{sortIcon('ntmPs')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('fcfMultiple')}>FCF Mul{sortIcon('fcfMultiple')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('fwdFcfMultiple')}>Fwd FCF Mul{sortIcon('fwdFcfMultiple')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('avgGrossMargin')}>毛利率(季均){sortIcon('avgGrossMargin')}</th>
-                    <th className="val-th-sort" onClick={() => handleSort('nonGaapNetMargin')}>Non-GAAP 净利率{sortIcon('nonGaapNetMargin')}</th>
+                    <th className="val-th-sort" onClick={() => handleSort('nonGaapNetMargin')}>NG 净利率{sortIcon('nonGaapNetMargin')}</th>
                     <th className="val-th-sort" onClick={() => handleSort('avgMargin')}>净利率(季均){sortIcon('avgMargin')}</th>
-                    <th style={{ width: 80 }}></th>
+                    <th className="val-th-sort" onClick={() => handleSort('ttmRoicY4')}>TTM ROIC{sortIcon('ttmRoicY4')}</th>
+                    <th className="val-th-actions"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredSnapshots.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="val-empty">
+                      <td colSpan={13} className="val-empty">
                         {snapshots.length === 0
                           ? '暂无数据，点击右上角「+ 添加快照」开始记录'
                           : `没有匹配「${searchQuery}」的记录`}
@@ -657,11 +701,12 @@ export default function ValuationModule({ onGoHome }: Props) {
                     <tr key={s.id} className="val-row val-row-clickable" onClick={() => setDetailSnapshot(s)}>
                       <td className="val-date">{s.snapshotDate}</td>
                       <td><strong>{s.ticker}</strong></td>
-                      <td>{s.companyName}</td>
                       <td className="val-num">{fmtNum(s.pe)}</td>
                       <td className="val-num">{fmtNum(s.ps)}</td>
                       <td className="val-num">{fmtNum(s.ntmPe)}</td>
                       <td className="val-num">{fmtNum(s.ntmPs)}</td>
+                      <td className="val-num">{fmtNum(s.fcfMultiple)}</td>
+                      <td className="val-num">{fmtNum(s.fwdFcfMultiple)}</td>
                       <td className="val-num">
                         {(() => {
                           const avg = avgGrossMargin(s);
@@ -697,10 +742,29 @@ export default function ValuationModule({ onGoHome }: Props) {
                           );
                         })()}
                       </td>
-                      <td onClick={e => e.stopPropagation()}>
+                      <td className="val-num">
+                        {(() => {
+                          const roic = s.ttmRoicY4;
+                          const hasHistory = [s.ttmRoicY1, s.ttmRoicY2, s.ttmRoicY3].some(v => v != null);
+                          if (roic == null) return '—';
+                          if (!hasHistory) return fmtNum(roic, true);
+                          return (
+                            <span className="val-ni-avg"
+                              onMouseEnter={e => openTip(e, [
+                                { label: 'Y1 (最早)', value: fmtNum(s.ttmRoicY1, true) },
+                                { label: 'Y2',        value: fmtNum(s.ttmRoicY2, true) },
+                                { label: 'Y3',        value: fmtNum(s.ttmRoicY3, true) },
+                                { label: 'Y4 (最新)', value: fmtNum(s.ttmRoicY4, true) },
+                              ])}
+                              onMouseLeave={closeTip}
+                            >{fmtNum(roic, true)}</span>
+                          );
+                        })()}
+                      </td>
+                      <td className="val-td-actions" onClick={e => e.stopPropagation()}>
                         <div className="val-row-actions">
-                          <button className="val-action-btn" onClick={() => openEdit(s)}>编辑</button>
-                          <button className="val-action-btn danger" onClick={() => handleDelete(s.id)}>删除</button>
+                          <button className="val-action-icon-btn" title="编辑" onClick={() => openEdit(s)}>✎</button>
+                          <button className="val-action-icon-btn danger" title="删除" onClick={() => handleDelete(s.id)}>✕</button>
                         </div>
                       </td>
                     </tr>
@@ -796,6 +860,22 @@ export default function ValuationModule({ onGoHome }: Props) {
                                   onMouseLeave={closeTip}
                                 >{fmtNum(avg, true)}</span>
                               );
+                            })() : m.key === 'ttmRoicY4' ? (() => {
+                              const roic = s.ttmRoicY4;
+                              const hasHistory = [s.ttmRoicY1, s.ttmRoicY2, s.ttmRoicY3].some(v => v != null);
+                              if (roic == null) return '—';
+                              if (!hasHistory) return fmtNum(roic, true);
+                              return (
+                                <span className="val-ni-avg"
+                                  onMouseEnter={e => openTip(e, [
+                                    { label: 'Y1 (最早)', value: fmtNum(s.ttmRoicY1, true) },
+                                    { label: 'Y2',        value: fmtNum(s.ttmRoicY2, true) },
+                                    { label: 'Y3',        value: fmtNum(s.ttmRoicY3, true) },
+                                    { label: 'Y4 (最新)', value: fmtNum(s.ttmRoicY4, true) },
+                                  ])}
+                                  onMouseLeave={closeTip}
+                                >{fmtNum(roic, true)}</span>
+                              );
                             })() : fmtNum(val, m.isPercent);
                             return (
                               <td
@@ -838,9 +918,12 @@ export default function ValuationModule({ onGoHome }: Props) {
                 { label: 'PS',               value: fmtNum(detailSnapshot.ps) },
                 { label: 'NTM PE',           value: fmtNum(detailSnapshot.ntmPe) },
                 { label: 'NTM PS',           value: fmtNum(detailSnapshot.ntmPs) },
+                { label: 'FCF Mul',          value: fmtNum(detailSnapshot.fcfMultiple) },
+                { label: 'Fwd FCF Mul',      value: fmtNum(detailSnapshot.fwdFcfMultiple) },
                 { label: '毛利率',           value: fmtNum(detailSnapshot.grossMargin, true) },
                 { label: '净利率',           value: fmtNum(detailSnapshot.netMargin, true) },
                 { label: 'Non-GAAP 净利率',  value: fmtNum(detailSnapshot.nonGaapNetMargin, true) },
+                { label: 'TTM ROIC',         value: fmtNum(detailSnapshot.ttmRoicY4, true) },
               ].map(m => (
                 <div key={m.label} className="val-detail-metric">
                   <div className="val-detail-metric-label">{m.label}</div>
@@ -899,6 +982,27 @@ export default function ValuationModule({ onGoHome }: Props) {
                       {fmtNum(avgNetIncome(detailSnapshot), true)}
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* TTM ROIC history */}
+            {[detailSnapshot.ttmRoicY1, detailSnapshot.ttmRoicY2,
+              detailSnapshot.ttmRoicY3, detailSnapshot.ttmRoicY4].some(v => v != null) && (
+              <div className="val-detail-section">
+                <div className="val-detail-section-title">近四年 TTM ROIC（Y1=最早，Y4=最新）</div>
+                <div className="val-detail-quarters">
+                  {[
+                    { label: 'Y1（最早）', val: detailSnapshot.ttmRoicY1 },
+                    { label: 'Y2',        val: detailSnapshot.ttmRoicY2 },
+                    { label: 'Y3',        val: detailSnapshot.ttmRoicY3 },
+                    { label: 'Y4（最新）', val: detailSnapshot.ttmRoicY4 },
+                  ].map(q => (
+                    <div key={q.label} className="val-detail-quarter">
+                      <div className="val-detail-quarter-label">{q.label}</div>
+                      <div className="val-detail-quarter-value">{fmtNum(q.val, true)}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -963,6 +1067,8 @@ export default function ValuationModule({ onGoHome }: Props) {
     "ps": 7.2,
     "ntmPe": 25.0,
     "ntmPs": 6.8,
+    "fcfMultiple": 32.0,
+    "fwdFcfMultiple": 28.5,
     "grossMargin": 0.462,
     "grossMarginQ1": 0.465,
     "grossMarginQ2": 0.461,
@@ -974,6 +1080,10 @@ export default function ValuationModule({ onGoHome }: Props) {
     "netMarginQ2": 0.248,
     "netMarginQ3": 0.259,
     "netMarginQ4": 0.206,
+    "ttmRoicY1": 0.28,
+    "ttmRoicY2": 0.31,
+    "ttmRoicY3": 0.35,
+    "ttmRoicY4": 0.38,
     "notes": "可选备注"
   }
 ]`}</pre>
@@ -1085,6 +1195,28 @@ export default function ValuationModule({ onGoHome }: Props) {
                   placeholder="留空"
                   value={numValue('ntmPs')}
                   onChange={numChange('ntmPs')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">FCF Mul</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder="留空"
+                  value={numValue('fcfMultiple')}
+                  onChange={numChange('fcfMultiple')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Fwd FCF Mul</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.01"
+                  placeholder="留空"
+                  value={numValue('fwdFcfMultiple')}
+                  onChange={numChange('fwdFcfMultiple')}
                 />
               </div>
               <div className="val-form-group">
@@ -1220,6 +1352,55 @@ export default function ValuationModule({ onGoHome }: Props) {
                 />
               </div>
 
+              {/* TTM ROIC */}
+              <div className="val-form-group full val-form-section-label">
+                近四年 TTM ROIC（Y1 = 最早，Y4 = 最新，小数形式如 0.35）
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Y1 ROIC（最早）</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.001"
+                  placeholder="如 0.28"
+                  value={numValue('ttmRoicY1')}
+                  onChange={numChange('ttmRoicY1')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Y2 ROIC</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.001"
+                  placeholder=""
+                  value={numValue('ttmRoicY2')}
+                  onChange={numChange('ttmRoicY2')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Y3 ROIC</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.001"
+                  placeholder=""
+                  value={numValue('ttmRoicY3')}
+                  onChange={numChange('ttmRoicY3')}
+                />
+              </div>
+              <div className="val-form-group">
+                <label className="val-form-label">Y4 ROIC（最新，显示用）</label>
+                <input
+                  className="val-form-input"
+                  type="number"
+                  step="0.001"
+                  placeholder="如 0.38"
+                  value={numValue('ttmRoicY4')}
+                  onChange={numChange('ttmRoicY4')}
+                />
+              </div>
+
               {/* Notes */}
               <div className="val-form-group full">
                 <label className="val-form-label">备注</label>
@@ -1259,6 +1440,7 @@ export default function ValuationModule({ onGoHome }: Props) {
           ))}
         </div>
       )}
+
     </div>
   );
 }

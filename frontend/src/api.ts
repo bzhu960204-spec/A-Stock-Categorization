@@ -340,6 +340,12 @@ export interface ValuationSnapshot {
   netMarginQ2?: number | null;
   netMarginQ3?: number | null;
   netMarginQ4?: number | null;
+  fcfMultiple?: number | null;
+  fwdFcfMultiple?: number | null;
+  ttmRoicY1?: number | null;
+  ttmRoicY2?: number | null;
+  ttmRoicY3?: number | null;
+  ttmRoicY4?: number | null;
   notes?: string;
   createdAt: string;
 }
@@ -366,4 +372,7 @@ export interface AppConfig {
   twelvedataApiKeyMasked: string;
 }
 export const getConfig = () => API.get<AppConfig>('/config');
-export const saveConfig = (config: { twelvedataApiKey: string }) => API.put<{ status: string; twelvedataApiKey: string }>('/config', config);
+export const saveConfig = (config: { twelvedataApiKey?: string }) =>
+  API.put<{ status: string }>('/config', config);
+
+

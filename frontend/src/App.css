@@ -5676,7 +5676,7 @@ body {
 }
 .val-table th {
   text-align: left;
-  padding: 9px 14px;
+  padding: 9px 10px;
   border-bottom: 2px solid var(--border);
   color: var(--text-secondary);
   font-weight: 600;
@@ -5685,7 +5685,7 @@ body {
   letter-spacing: 0.03em;
 }
 .val-table td {
-  padding: 9px 14px;
+  padding: 9px 10px;
   border-bottom: 1px solid var(--border-bright, rgba(255,255,255,0.06));
   vertical-align: middle;
 }
@@ -5908,6 +5908,49 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
   border-top: 1px solid var(--border);
 }
 
+/* ── Sticky action column ───────────────────────────────────────── */
+.val-table .val-th-actions {
+  position: sticky;
+  right: 0;
+  background: var(--bg-secondary, #1a1a2e);
+  z-index: 2;
+  width: 62px;
+  min-width: 62px;
+}
+.val-table .val-td-actions {
+  position: sticky;
+  right: 0;
+  background: var(--bg-primary, var(--bg));
+  z-index: 1;
+}
+.val-row:hover .val-td-actions { background: var(--hover-bg); }
+.val-action-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  padding: 0;
+}
+.val-action-icon-btn:hover {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.val-action-icon-btn.danger:hover {
+  background: var(--danger-dim, rgba(231,76,60,0.12));
+  border-color: var(--danger, #e74c3c);
+  color: var(--danger, #e74c3c);
+}
+
 /* ===================================================================
    Valuation Module (估值比较)
    =================================================================== */
@@ -5977,11 +6020,11 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
-  min-width: 860px;
+  min-width: 1100px;
 }
 .val-table th {
   text-align: left;
-  padding: 9px 14px;
+  padding: 9px 10px;
   border-bottom: 2px solid var(--border);
   color: var(--text-secondary);
   font-weight: 600;
@@ -5990,7 +6033,7 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
   letter-spacing: 0.03em;
 }
 .val-table td {
-  padding: 9px 14px;
+  padding: 9px 10px;
   border-bottom: 1px solid var(--border-bright, rgba(255,255,255,0.06));
   vertical-align: middle;
 }

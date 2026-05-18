@@ -108,7 +108,9 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
 
   useEffect(() => {
     if (!showSettings) return;
-    getConfig().then(res => setApiKey(res.data.twelvedataApiKey ?? '')).catch(() => {});
+    getConfig().then(res => {
+      setApiKey(res.data.twelvedataApiKey ?? '');
+    }).catch(() => {});
   }, [showSettings]);
 
   // Close settings panel when clicking outside
@@ -170,16 +172,18 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
                 placeholder="输入你的 Twelve Data API Key"
                 spellCheck={false}
               />
-              <button
-                className="confirm-btn"
-                onClick={handleSaveSettings}
-                disabled={apiKeySaving}
-              >{apiKeySaving ? '保存中…' : '保存'}</button>
             </div>
             <span className="home-settings-hint">
               用于美股/港股/全球股票搜索。申请地址：
               <a href="https://twelvedata.com" target="_blank" rel="noreferrer">twelvedata.com</a>
             </span>
+          </div>
+          <div className="home-settings-row">
+            <button
+              className="confirm-btn"
+              onClick={handleSaveSettings}
+              disabled={apiKeySaving}
+            >{apiKeySaving ? '保存中…' : '保存全部'}</button>
             {apiKeySaved && <span className="home-settings-ok">✓ 已保存</span>}
             {apiKeyError && <span className="home-settings-err">{apiKeyError}</span>}
           </div>

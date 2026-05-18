@@ -60,7 +60,6 @@ public class ValuationController {
     @GetMapping("/companies")
     public List<Map<String, String>> getCompanies() {
         List<ValuationSnapshot> all = repo.findAll();
-        // Keep first encountered companyName per ticker; sort by ticker alphabetically
         LinkedHashMap<String, String> seen = new LinkedHashMap<>();
         all.stream()
            .sorted(Comparator.comparing(ValuationSnapshot::getTicker))
@@ -70,3 +69,4 @@ public class ValuationController {
                 .collect(Collectors.toList());
     }
 }
+

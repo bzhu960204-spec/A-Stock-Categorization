@@ -62,6 +62,18 @@ public class ValuationSnapshot {
     private Double netMarginQ3;
     private Double netMarginQ4;
 
+    /** FCF multiple（自由现金流倍数）*/
+    private Double fcfMultiple;
+
+    /** Forward FCF multiple（预期自由现金流倍数）*/
+    private Double fwdFcfMultiple;
+
+    /** TTM ROIC 最近四年（Y1=最早，Y4=最新），百分比，如 18.5 表示 18.5% */
+    private Double ttmRoicY1;
+    private Double ttmRoicY2;
+    private Double ttmRoicY3;
+    private Double ttmRoicY4;
+
     /** 可选备注 */
     @Column(length = 500)
     private String notes;

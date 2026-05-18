@@ -23,30 +23,38 @@ public class ConfigController {
         this.settingRepo = settingRepo;
     }
 
-    /** GET /api/config  — returns current config (key masked for display) */
+    /** GET /api/config  — returns current config (keys masked for display) */
     @GetMapping
     public ResponseEntity<Map<String, String>> getConfig() {
-        String key = resolveApiKey();
-        String masked = key.isBlank() ? "" : key.substring(0, Math.min(4, key.length())) + "****";
+        String tdKey = resolveTwelveDataApiKey();
+        String tdMasked = tdKey.isBlank() ? "" : tdKey.substring(0, Math.min(4, tdKey.length())) + "****";
         return ResponseEntity.ok(Map.of(
-                "twelvedataApiKey", key,
-                "twelvedataApiKeyMasked", masked
+                "twelvedataApiKey", tdKey,
+                "twelvedataApiKeyMasked", tdMasked
         ));
     }
 
     /** PUT /api/config  — saves config to DB */
     @PutMapping
     public ResponseEntity<Map<String, String>> saveConfig(@RequestBody Map<String, String> body) {
-        String newKey = body.getOrDefault("twelvedataApiKey", "").trim();
-        settingRepo.save(new AppSetting(KEY_TWELVEDATA, newKey));
-        return ResponseEntity.ok(Map.of("status", "ok", "twelvedataApiKey", newKey));
+        if (body.containsKey("twelvedataApiKey")) {
+            String newKey = body.getOrDefault("twelvedataApiKey", "").trim();
+            settingRepo.save(new AppSetting(KEY_TWELVEDATA, newKey));
+        }
+        return ResponseEntity.ok(Map.of("status", "ok"));
     }
 
-    /** Used by other controllers to read the effective API key */
-    public String resolveApiKey() {
+    /** Used by other controllers to read the effective Twelve Data API key */
+    public String resolveTwelveDataApiKey() {
         return settingRepo.findById(KEY_TWELVEDATA)
                 .map(AppSetting::getValue)
                 .filter(v -> v != null && !v.isBlank())
                 .orElse(defaultTwelveDataApiKey);
     }
+
+    /** Alias for backward compat */
+    public String resolveApiKey() {
+        return resolveTwelveDataApiKey();
+    }
+
 }
