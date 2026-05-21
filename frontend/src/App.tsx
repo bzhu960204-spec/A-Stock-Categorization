@@ -503,8 +503,8 @@ function App({ onGoHome }: AppProps = {}) {
   const profileSections = [
     { key: 'business',            title: '业务',           placeholder: '记录公司主营业务、业务结构、业务变化...',               value: profileDraft.business },
     { key: 'customers',           title: '客户',           placeholder: '记录核心客户、集中度、议价能力...',                     value: profileDraft.customers },
-    { key: 'competitors',         title: '竞争对手',       placeholder: '记录主要竞争对手、市场格局...',                         value: profileDraft.competitors },
     { key: 'industryPosition',    title: '行业地位',       placeholder: '记录公司在行业中的排名、各业务市占率、竞争格局地位...', value: profileDraft.industryPosition },
+    { key: 'competitors',         title: '竞争对手',       placeholder: '记录主要竞争对手、市场格局...',                         value: profileDraft.competitors },
     { key: 'strengths',           title: '竞争优势',       placeholder: '记录护城河、成本优势、渠道能力、品牌与生态壁垒...',     value: profileDraft.strengths },
     { key: 'structuralWeaknesses',title: '结构性弱点',     placeholder: '记录商业模式或行业位置中的长期弱点、脆弱点...',         value: profileDraft.structuralWeaknesses },
     { key: 'founderCeoHolding',   title: '创始人/CEO持股', placeholder: '记录创始人/CEO 控制权与持股结构...',                    value: profileDraft.founderCeoHolding },
