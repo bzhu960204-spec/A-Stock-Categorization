@@ -24,6 +24,7 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const [newSectorName, setNewSectorName] = useState('');
   const [editingSector, setEditingSector] = useState<Sector | null>(null);
   const [editSectorName, setEditSectorName] = useState('');
+  const [sectorSearchQuery, setSectorSearchQuery] = useState('');
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -348,8 +349,20 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
               </div>
             )}
 
+            <div style={{ position: 'relative', marginBottom: '6px' }}>
+              <input
+                className="cat-filter-search-input"
+                placeholder="过滤行业…"
+                value={sectorSearchQuery}
+                onChange={e => setSectorSearchQuery(e.target.value)}
+              />
+              {sectorSearchQuery && (
+                <button className="cat-filter-search-clear" onClick={() => setSectorSearchQuery('')}>✕</button>
+              )}
+            </div>
+
             <div className="category-list">
-              {sectors.map(sector => (
+              {sectors.filter(s => s.name.toLowerCase().includes(sectorSearchQuery.toLowerCase())).map(sector => (
                 <div key={sector.id} className="category-chip-row">
                   {editingSector?.id === sector.id ? (
                     <div className="inline-add-row" style={{ flex: 1 }}>

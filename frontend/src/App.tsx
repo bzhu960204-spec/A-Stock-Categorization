@@ -186,6 +186,7 @@ function App({ onGoHome }: AppProps = {}) {
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
   const [filterMode, setFilterMode] = useState<'union' | 'intersection'>('union');
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [filterKey, setFilterKey] = useState(0);
   const [marketFilters, setMarketFilters] = useState<Set<string>>(new Set()); // empty = show all
   const [starFilter, setStarFilter] = useState<number | null>(null); // null = 全部, 1-5 = 至少N星
 
@@ -204,6 +205,9 @@ function App({ onGoHome }: AppProps = {}) {
   const [newStockCode, setNewStockCode] = useState('');
   const [newStockName, setNewStockName] = useState('');
   const [newStockNotes, setNewStockNotes] = useState('');
+  const [newStockCategoryIds, setNewStockCategoryIds] = useState<Set<number>>(new Set());
+  const [showNewStockCatPicker, setShowNewStockCatPicker] = useState(false);
+  const [newStockCatSearch, setNewStockCatSearch] = useState('');
   const [addStockError, setAddStockError] = useState('');
   const [lookingUp, setLookingUp] = useState(false);
   const [codeSuggestions, setCodeSuggestions] = useState<LookupSuggestion[]>([]);
@@ -359,7 +363,16 @@ function App({ onGoHome }: AppProps = {}) {
       try {
         if (searchKeyword.trim()) {
           const res = await searchStocks(searchKeyword);
-          setStocks(res.data);
+          let results = res.data;
+          if (selectedCategoryIds.size > 0) {
+            results = results.filter(stock => {
+              const stockCatIds = new Set(stock.categories.map(c => c.id));
+              return filterMode === 'intersection'
+                ? Array.from(selectedCategoryIds).every(id => stockCatIds.has(id))
+                : Array.from(selectedCategoryIds).some(id => stockCatIds.has(id));
+            });
+          }
+          setStocks(results);
         } else if (selectedCategoryIds.size > 0) {
           const res = await filterStocks(Array.from(selectedCategoryIds), filterMode);
           setStocks(res.data);
@@ -373,7 +386,7 @@ function App({ onGoHome }: AppProps = {}) {
     };
     const timer = setTimeout(doFilter, 300);
     return () => clearTimeout(timer);
-  }, [selectedCategoryIds, filterMode, searchKeyword]);
+  }, [selectedCategoryIds, filterMode, searchKeyword, filterKey]);
 
   // Lookup stock
   const handleLookup = async (value: string, field: 'code' | 'name') => {
@@ -577,7 +590,7 @@ function App({ onGoHome }: AppProps = {}) {
         founderCeoHolding: res.data.founderCeoHolding || '',
         industryPosition: res.data.industryPosition || '',
       });
-      await loadData();
+      setStocks(prev => prev.map(s => s.id === res.data.id ? res.data : s));
     } catch (e) {
       console.error('Failed to save company profile', e);
     } finally {
@@ -792,18 +805,22 @@ ${chainHtmlBlocks}
     setAddStockError('');
     try {
       const marketValue = newStockMarket === 'OTHER' ? newStockCustomMarket.trim().toUpperCase() : newStockMarket;
-      await createStock({ code: newStockCode, name: newStockName, notes: newStockNotes, market: marketValue });
+      const created = await createStock({ code: newStockCode, name: newStockName, notes: newStockNotes, market: marketValue });
+      if (newStockCategoryIds.size > 0) {
+        await setStockCategories(created.data.id, Array.from(newStockCategoryIds));
+      }
       setShowAddStock(false);
       setNewStockCode('');
       setNewStockName('');
       setNewStockNotes('');
       setNewStockMarket('CN');
       setNewStockCustomMarket('');
+      setNewStockCategoryIds(new Set());
       setAddStockError('');
       setCodeSuggestions([]);
       setNameSuggestions([]);
       setActiveSuggestField(null);
-      loadData();
+      setFilterKey(k => k + 1);
     } catch (e) {
       console.error('Failed to add stock', e);
     }
@@ -1342,7 +1359,7 @@ ${chainHtmlBlocks}
                 <button className="clear-btn" onClick={() => setSearchKeyword('')}>×</button>
               )}
             </div>
-            <button className="add-btn" onClick={() => setShowAddStock(true)}>
+            <button className="add-btn" onClick={() => { setShowAddStock(true); setNewStockCategoryIds(new Set(selectedCategoryIds)); }}>
               + 添加股票
             </button>
           </div>
@@ -1461,6 +1478,8 @@ ${chainHtmlBlocks}
           setNewStockNotes('');
           setNewStockMarket('CN');
           setNewStockCustomMarket('');
+          setNewStockCategoryIds(new Set());
+          setNewStockCatSearch('');
           setCodeSuggestions([]);
           setNameSuggestions([]);
           setActiveSuggestField(null);
@@ -1609,6 +1628,31 @@ ${chainHtmlBlocks}
                 rows={3}
               />
             </div>
+            {categories.length > 0 && (
+              <div className="form-group">
+                <label>分类</label>
+                <button
+                  type="button"
+                  className="new-stock-cat-trigger"
+                  onClick={() => { setShowNewStockCatPicker(true); setNewStockCatSearch(''); }}
+                >
+                  {newStockCategoryIds.size === 0
+                    ? '点击选择分类…'
+                    : (
+                      <span className="new-stock-cat-preview">
+                        {Array.from(newStockCategoryIds).map(id => {
+                          const cat = categories.find(c => c.id === id);
+                          return cat ? (
+                            <span key={id} className="new-stock-cat-badge" style={{ background: cat.color || 'var(--accent)', color: '#fff' }}>{cat.name}</span>
+                          ) : null;
+                        })}
+                        <span className="new-stock-cat-edit">编辑</span>
+                      </span>
+                    )
+                  }
+                </button>
+              </div>
+            )}
             <div className="modal-actions">
               <button className="cancel-btn" onClick={() => {
                 setShowAddStock(false);
@@ -1617,6 +1661,8 @@ ${chainHtmlBlocks}
                 setNewStockNotes('');
                 setNewStockMarket('CN');
                 setNewStockCustomMarket('');
+                setNewStockCategoryIds(new Set());
+                setNewStockCatSearch('');
                 setAddStockError('');
                 setCodeSuggestions([]);
                 setNameSuggestions([]);
@@ -1624,6 +1670,64 @@ ${chainHtmlBlocks}
               }}>取消</button>
               {addStockError && <span style={{ color: 'var(--danger, #e74c3c)', fontSize: 13 }}>{addStockError}</span>}
               <button className="confirm-btn" onClick={handleAddStock}>添加</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* New-stock category picker */}
+      {showNewStockCatPicker && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }} onClick={() => setShowNewStockCatPicker(false)}>
+          <div className="glass-modal assign-modal" onClick={e => e.stopPropagation()}>
+            <div className="assign-modal-header">
+              <h2>选择分类</h2>
+              {newStockCategoryIds.size > 0 && (
+                <span className="assign-modal-stock">已选 {newStockCategoryIds.size} 个</span>
+              )}
+            </div>
+            {categories.length > 5 && (
+              <div className="assign-search-box">
+                <input
+                  className="assign-search-input"
+                  type="text"
+                  placeholder="搜索分类…"
+                  value={newStockCatSearch}
+                  onChange={e => setNewStockCatSearch(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            )}
+            <div className="assign-tag-cloud">
+              {categories
+                .filter(cat =>
+                  !newStockCatSearch ||
+                  cat.name.toLowerCase().includes(newStockCatSearch.toLowerCase()) ||
+                  (cat.description || '').toLowerCase().includes(newStockCatSearch.toLowerCase())
+                )
+                .map(cat => {
+                  const selected = newStockCategoryIds.has(cat.id);
+                  return (
+                    <button
+                      key={cat.id}
+                      className={`assign-tag ${selected ? 'selected' : ''}`}
+                      style={{ '--cat-color': cat.color || '#6366f1' } as React.CSSProperties}
+                      title={cat.description || ''}
+                      onClick={() => setNewStockCategoryIds(prev => {
+                        const next = new Set(prev);
+                        if (next.has(cat.id)) next.delete(cat.id); else next.add(cat.id);
+                        return next;
+                      })}
+                    >
+                      <span className="assign-tag-dot" />
+                      <span>{cat.name}</span>
+                      {selected && <span className="assign-tag-check">✓</span>}
+                    </button>
+                  );
+                })}
+            </div>
+            <div className="modal-actions">
+              <button className="cancel-btn" onClick={() => { setNewStockCategoryIds(new Set()); setShowNewStockCatPicker(false); }}>清空</button>
+              <button className="confirm-btn" onClick={() => setShowNewStockCatPicker(false)}>确定</button>
             </div>
           </div>
         </div>

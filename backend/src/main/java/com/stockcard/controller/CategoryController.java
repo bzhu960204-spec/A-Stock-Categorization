@@ -1,12 +1,15 @@
 package com.stockcard.controller;
 
 import com.stockcard.entity.Category;
+import com.stockcard.entity.Stock;
 import com.stockcard.repository.CategoryRepository;
+import com.stockcard.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/categories")
@@ -14,6 +17,7 @@ import java.util.List;
 public class CategoryController {
 
     private final CategoryRepository categoryRepository;
+    private final StockRepository stockRepository;
 
     @GetMapping
     public List<Category> getAllCategories() {
@@ -39,6 +43,12 @@ public class CategoryController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
+        // Remove association from all stocks before deleting
+        List<Stock> affected = stockRepository.findByAnyCategoryIds(Set.of(id));
+        for (Stock stock : affected) {
+            stock.getCategories().removeIf(cat -> cat.getId().equals(id));
+            stockRepository.save(stock);
+        }
         categoryRepository.deleteById(id);
         return ResponseEntity.ok().build();
     }
