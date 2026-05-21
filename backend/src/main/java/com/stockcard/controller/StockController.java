@@ -63,6 +63,7 @@ public class StockController {
                     stock.setStructuralWeaknesses(stockDetails.getStructuralWeaknesses());
                     stock.setFuture(stockDetails.getFuture());
                     stock.setFounderCeoHolding(stockDetails.getFounderCeoHolding());
+                    stock.setIndustryPosition(stockDetails.getIndustryPosition());
                     if (stockDetails.getMarket() != null) {
                         stock.setMarket(stockDetails.getMarket());
                     }
@@ -347,6 +348,7 @@ public class StockController {
         if (isChanged(current.getBusiness(), next.getBusiness())) changedFields.add("业务");
         if (isChanged(current.getCustomers(), next.getCustomers())) changedFields.add("客户");
         if (isChanged(current.getCompetitors(), next.getCompetitors())) changedFields.add("竞争对手");
+        if (isChanged(current.getIndustryPosition(), next.getIndustryPosition())) changedFields.add("行业地位");
         if (isChanged(current.getStrengths(), next.getStrengths())) changedFields.add("竞争优势");
         if (isChanged(current.getStructuralWeaknesses(), next.getStructuralWeaknesses())) changedFields.add("结构性弱点");
         if (isChanged(current.getFuture(), next.getFuture())) changedFields.add("面向未来");

@@ -74,6 +74,7 @@ npm run dev
   "business": "主营业务、业务结构、业务变化",
   "customers": "核心客户、客户集中度、议价能力",
   "competitors": "主要竞争对手与市场格局",
+  "industryPosition": "公司在行业中的排名、各业务市占率、竞争格局地位",
   "strengths": "竞争优势，例如护城河、成本优势、渠道能力",
   "structuralWeaknesses": "结构性弱点，例如商业模式脆弱点",
   "founderCeoHolding": "创始人/CEO 背景与持股控制权",
@@ -90,6 +91,7 @@ npm run dev
     "business": "...",
     "customers": "...",
     "competitors": "...",
+    "industryPosition": "...",
     "strengths": "...",
     "structuralWeaknesses": "...",
     "founderCeoHolding": "...",
@@ -106,6 +108,7 @@ npm run dev
 - `业务`
 - `客户`
 - `竞争对手`
+- `行业地位`
 - `竞争优势`
 - `结构性弱点`
 - `面向未来`

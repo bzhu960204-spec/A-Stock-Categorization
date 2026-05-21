@@ -25,6 +25,7 @@ export interface Stock {
   future?: string;
   strengthsWeaknessesLegacy?: string;
   founderCeoHolding?: string;
+  industryPosition?: string;
   categories: Category[];
 }
 

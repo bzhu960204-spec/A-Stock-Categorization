@@ -56,6 +56,10 @@ public class Stock {
     @Column(columnDefinition = "CLOB")
     private String founderCeoHolding; // 创始人CEO及持股
 
+    @Lob
+    @Column(columnDefinition = "CLOB")
+    private String industryPosition; // 行业地位（行业排名、各业务市占率等）
+
     @Column(length = 10)
     private String market = "CN"; // CN = A股, US = 美股
 
