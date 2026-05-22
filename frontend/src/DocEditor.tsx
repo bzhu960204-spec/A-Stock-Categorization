@@ -1,11 +1,14 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
+import { InputRule } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Table, TableHeader, TableCell } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
+import { InlineMath, BlockMath } from '@tiptap/extension-mathematics';
+import 'katex/dist/katex.min.css';
 
 // ── Resizable Image NodeView ──────────────────────────────────────────────────
 function ResizableImageView({ node, updateAttributes, editor }: any) {
@@ -74,6 +77,38 @@ const ResizableImage = Image.extend({
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── InlineMath with corrected InputRule range ─────────────────────────────────
+// Tiptap triggers InputRules on Enter with text='\n'. The default range formula
+// `from - (match[0].length - text.length)` is off-by-1 in that case because
+// '\n' is NOT part of the match. Fix: resolve the block start position and add
+// match.index so the range is correct regardless of trigger character.
+const FixedInlineMath = InlineMath.extend({
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      katexOptions: { throwOnError: false },
+    };
+  },
+  addInputRules() {
+    return [
+      new InputRule({
+        find: /(?<!\$)(\$\$([^$\n]+?)\$\$)(?!\$)/,
+        handler: ({ state, range, match }) => {
+          const latex = match[2];
+          if (!latex) return;
+          const { tr } = state;
+          // Block-start + match offset = absolute position where the $$ began.
+          // This works whether the rule fired on the last "$" or on Enter.
+          const blockStart = state.doc.resolve(range.to).start();
+          const correctFrom = blockStart + (match.index ?? 0);
+          tr.replaceWith(correctFrom, range.to, this.type.create({ latex }));
+        },
+      }),
+    ];
+  },
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface DocEditorHandle {
   insertImage: (src: string) => void;
 }
@@ -98,9 +133,13 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
         TableRow,
         TableHeader,
         TableCell,
+        FixedInlineMath,
+        BlockMath,
       ],
       content: value || '',
-      editable: !readonly,
+      // Always start editable so NodeViews (KaTeX) initialize properly.
+      // We switch to non-editable below via setEditable() after mounting.
+      editable: true,
       onUpdate: ({ editor }) => {
         suppressSyncRef.current = true;
         onChange(editor.getHTML());
@@ -157,6 +196,12 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
       },
     }));
 
+    // Switch editable state after editor mounts so NodeViews always initialise.
+    useEffect(() => {
+      if (!editor || editor.isDestroyed) return;
+      editor.setEditable(!readonly, false);
+    }, [editor, readonly]);
+
     // Sync external value changes (e.g. initial load, image inserted via file picker)
     useEffect(() => {
       if (!editor || editor.isDestroyed || suppressSyncRef.current) return;
@@ -199,6 +244,7 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
             {btn('`', () => editor.chain().focus().toggleCode().run(), editor.isActive('code'), '行内代码')}
             {btn('—', () => editor.chain().focus().setHorizontalRule().run(), false, '分割线')}
             <span className="doc-tb-sep" />
+            {btn('∑', () => editor.chain().focus().insertInlineMath({ latex: '' }).run(), false, '插入行内数学公式 (输入后双击可编辑；或直接在文中输入 $$公式$$ 回车触发)')}
             {btn('⊞', () => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run(), false, '插入表格')}
             {editor.isActive('table') && (<>
               <span className="doc-tb-sep" />

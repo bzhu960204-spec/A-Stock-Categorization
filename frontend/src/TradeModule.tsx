@@ -629,10 +629,9 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
 
             <div className="rp-modal-body">
               {modalMode === 'read' ? (
-                <div
-                  className="rp-modal-read-content doc-read-view"
-                  dangerouslySetInnerHTML={{ __html: modalTrade?.content || '<p style="opacity:.5">（暂无内容）</p>' }}
-                />
+                <div className="rp-modal-read-content doc-read-view">
+                  <DocEditor value={modalTrade?.content || ''} onChange={() => {}} readonly />
+                </div>
               ) : (
                 <div className="rp-modal-editor-wrap">
                   <DocEditor

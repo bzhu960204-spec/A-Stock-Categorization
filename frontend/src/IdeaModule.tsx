@@ -628,10 +628,9 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
 
             <div className="rp-modal-body">
               {modalMode === 'read' ? (
-                <div
-                  className="rp-modal-read-content doc-read-view"
-                  dangerouslySetInnerHTML={{ __html: modalIdea?.content || '<p style="opacity:.5">（暂无内容）</p>' }}
-                />
+                <div className="rp-modal-read-content doc-read-view">
+                  <DocEditor value={modalIdea?.content || ''} onChange={() => {}} readonly />
+                </div>
               ) : (
                 <div className="rp-modal-editor-wrap">
                   <DocEditor

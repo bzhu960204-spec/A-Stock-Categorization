@@ -684,7 +684,9 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
 
             <div className="rp-modal-body">
               {modalMode === 'read' ? (
-                <div className="rp-modal-read-content doc-read-view" dangerouslySetInnerHTML={{ __html: modalReport?.content || '<p>（无内容）</p>' }} />
+                <div className="rp-modal-read-content doc-read-view">
+                  <DocEditor value={modalReport?.content || ''} onChange={() => {}} readonly />
+                </div>
               ) : (
                 <div className="rp-modal-editor-wrap">
                   <DocEditor

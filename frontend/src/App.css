@@ -2218,6 +2218,22 @@ body {
   color: var(--text-secondary);
   font-size: 0.85rem;
 }
+/* ── KaTeX math formula rendering ───────────────────────────────────────────── */
+.tiptap-mathematics-render {
+  display: inline;
+  vertical-align: middle;
+  cursor: default;
+}
+.tiptap-mathematics-render--editable {
+  cursor: pointer;
+}
+/* Force KaTeX to inherit the editor text color so formulas are visible in
+   both light and dark themes, and in both edit and read-only mode.          */
+.doc-tiptap-wrap .tiptap-mathematics-render .katex {
+  color: inherit;
+  font-size: 1.1em;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
 .doc-tiptap-wrap .ProseMirror blockquote {
   border-left: 3px solid color-mix(in srgb, var(--accent) 55%, transparent);
   margin: 0.8em 0;
