@@ -285,6 +285,31 @@ export const updateIdeaRating = (id: number, rating: number) =>
   API.patch<Idea>(`/ideas/${id}/rating`, { rating });
 export const deleteIdea = (id: number) => API.delete(`/ideas/${id}`);
 
+// Idea Attachments
+export interface IdeaAttachment {
+  id: number;
+  ideaId: number;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  createdAt: string;
+}
+
+export const getIdeaAttachments = (ideaId: number) =>
+  API.get<IdeaAttachment[]>(`/ideas/${ideaId}/attachments`);
+export const uploadIdeaAttachment = async (ideaId: number, file: File): Promise<IdeaAttachment> => {
+  const form = new FormData();
+  form.append('file', file);
+  const res = await API.post<IdeaAttachment>(`/ideas/${ideaId}/attachments`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data;
+};
+export const deleteIdeaAttachment = (ideaId: number, attachmentId: number) =>
+  API.delete(`/ideas/${ideaId}/attachments/${attachmentId}`);
+export const getIdeaAttachmentDownloadUrl = (ideaId: number, attachmentId: number) =>
+  `/api/ideas/${ideaId}/attachments/${attachmentId}/download`;
+
 // ===== Trades (交易记录) APIs =====
 export interface TradeCategory {
   id: number;

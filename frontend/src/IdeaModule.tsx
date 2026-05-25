@@ -3,7 +3,8 @@ import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
   getIdeaCategories, createIdeaCategory, updateIdeaCategory, deleteIdeaCategory,
   getIdeas, searchIdeas, createIdea, updateIdea, updateIdeaRating, deleteIdea,
-  type IdeaCategory, type Idea,
+  getIdeaAttachments, uploadIdeaAttachment, deleteIdeaAttachment, getIdeaAttachmentDownloadUrl,
+  type IdeaCategory, type Idea, type IdeaAttachment,
 } from './api';
 import './App.css';
 
@@ -53,6 +54,12 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
   const [saveError, setSaveError] = useState('');
 
   const docEditorRef = useRef<DocEditorHandle>(null);
+
+  // Attachments
+  const [attachments, setAttachments] = useState<IdeaAttachment[]>([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const attachInputRef = useRef<HTMLInputElement>(null);
 
   // ── Theme ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -163,6 +170,8 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     setModalIdea(idea);
     setModalMode('read');
     setModalOpen(true);
+    setAttachments([]);
+    getIdeaAttachments(idea.id).then(res => setAttachments(res.data)).catch(() => {});
   };
 
   const openNewModal = () => {
@@ -176,6 +185,7 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     editContentRef.current = '';
     setEditRating(0);
     setSaveError('');
+    setAttachments([]);
     setModalMode('edit');
     setModalOpen(true);
   };
@@ -301,6 +311,64 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
 </html>`;
     const win = window.open('', '_blank', 'width=900,height=700');
     if (win) { win.document.write(html); win.document.close(); }
+  };
+
+  // ── Attachment handlers ────────────────────────────────────────────────────
+  const doUploadFile = async (file: File) => {
+    if (!modalIdea) return;
+    setUploadingAttachment(true);
+    try {
+      const att = await uploadIdeaAttachment(modalIdea.id, file);
+      setAttachments(prev => [att, ...prev]);
+    } catch {
+      alert('附件上传失败，请重试。');
+    } finally {
+      setUploadingAttachment(false);
+      if (attachInputRef.current) attachInputRef.current.value = '';
+    }
+  };
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await doUploadFile(file);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    await doUploadFile(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleAttachmentDelete = async (att: IdeaAttachment) => {
+    if (!window.confirm(`确定删除附件「${att.fileName}」？`)) return;
+    try {
+      await deleteIdeaAttachment(att.ideaId, att.id);
+      setAttachments(prev => prev.filter(a => a.id !== att.id));
+    } catch {
+      alert('删除附件失败。');
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -638,6 +706,66 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
                     value={editContent}
                     onChange={v => { editContentRef.current = v; setEditContent(v); }}
                   />
+                </div>
+              )}
+
+              {/* ── Attachments Section ── */}
+              {(modalMode === 'read' ? attachments.length > 0 : !!modalIdea) && (
+                <div
+                  className={`idea-attachments-section${modalMode === 'edit' && dragOver ? ' drag-over' : ''}`}
+                  onDrop={modalMode === 'edit' ? handleDrop : undefined}
+                  onDragOver={modalMode === 'edit' ? handleDragOver : undefined}
+                  onDragLeave={modalMode === 'edit' ? handleDragLeave : undefined}
+                >
+                  <div className="idea-attachments-header">
+                    <span className="idea-attachments-title">📎 附件{attachments.length > 0 ? ` (${attachments.length})` : ''}</span>
+                    {modalMode === 'edit' && modalIdea && (
+                      <>
+                        <button
+                          className="idea-attach-upload-btn"
+                          onClick={() => attachInputRef.current?.click()}
+                          disabled={uploadingAttachment}
+                        >
+                          {uploadingAttachment ? '⏳ 上传中…' : '＋ 上传附件'}
+                        </button>
+                        <input
+                          ref={attachInputRef}
+                          type="file"
+                          style={{ display: 'none' }}
+                          onChange={handleAttachmentUpload}
+                        />
+                      </>
+                    )}
+                  </div>
+                  {attachments.length > 0 && (
+                    <div className="idea-attachments-list">
+                      {attachments.map(att => (
+                        <div key={att.id} className="idea-attachment-item">
+                          <a
+                            href={getIdeaAttachmentDownloadUrl(att.ideaId, att.id)}
+                            className="idea-attachment-link"
+                            download={att.fileName}
+                            title={`下载 ${att.fileName}`}
+                          >
+                            <span className="idea-attachment-icon">📄</span>
+                            <span className="idea-attachment-name">{att.fileName}</span>
+                            <span className="idea-attachment-size">{formatFileSize(att.fileSize)}</span>
+                          </a>
+                          {modalMode === 'edit' && (
+                            <button
+                              className="chip-edit-btn"
+                              style={{ color: 'var(--danger)' }}
+                              title="删除附件"
+                              onClick={() => handleAttachmentDelete(att)}
+                            >✕</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {modalMode === 'edit' && attachments.length === 0 && (
+                    <div className="idea-attachments-empty">将文件拖拽到此处，或点击上方按钮上传</div>
+                  )}
                 </div>
               )}
             </div>
