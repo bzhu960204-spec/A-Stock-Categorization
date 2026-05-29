@@ -91,14 +91,25 @@ const FixedInlineMath = InlineMath.extend({
   },
   addInputRules() {
     return [
+      // $$...$$ trigger (original)
       new InputRule({
         find: /(?<!\$)(\$\$([^$\n]+?)\$\$)(?!\$)/,
         handler: ({ state, range, match }) => {
           const latex = match[2];
           if (!latex) return;
           const { tr } = state;
-          // Block-start + match offset = absolute position where the $$ began.
-          // This works whether the rule fired on the last "$" or on Enter.
+          const blockStart = state.doc.resolve(range.to).start();
+          const correctFrom = blockStart + (match.index ?? 0);
+          tr.replaceWith(correctFrom, range.to, this.type.create({ latex }));
+        },
+      }),
+      // $...$ trigger (single dollar)
+      new InputRule({
+        find: /(?<!\$)\$([^$\n]+?)\$(?!\$)/,
+        handler: ({ state, range, match }) => {
+          const latex = match[1];
+          if (!latex) return;
+          const { tr } = state;
           const blockStart = state.doc.resolve(range.to).start();
           const correctFrom = blockStart + (match.index ?? 0);
           tr.replaceWith(correctFrom, range.to, this.type.create({ latex }));
