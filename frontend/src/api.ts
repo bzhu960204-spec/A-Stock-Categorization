@@ -310,6 +310,24 @@ export const deleteIdeaAttachment = (ideaId: number, attachmentId: number) =>
 export const getIdeaAttachmentDownloadUrl = (ideaId: number, attachmentId: number) =>
   `/api/ideas/${ideaId}/attachments/${attachmentId}/download`;
 
+// Idea Comments
+export interface IdeaComment {
+  id: number;
+  ideaId: number;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const getIdeaComments = (ideaId: number) =>
+  API.get<IdeaComment[]>(`/ideas/${ideaId}/comments`);
+export const createIdeaComment = (ideaId: number, content: string) =>
+  API.post<IdeaComment>(`/ideas/${ideaId}/comments`, { content });
+export const updateIdeaComment = (ideaId: number, commentId: number, content: string) =>
+  API.put<IdeaComment>(`/ideas/${ideaId}/comments/${commentId}`, { content });
+export const deleteIdeaComment = (ideaId: number, commentId: number) =>
+  API.delete(`/ideas/${ideaId}/comments/${commentId}`);
+
 // ===== Trades (交易记录) APIs =====
 export interface TradeCategory {
   id: number;

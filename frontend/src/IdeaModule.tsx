@@ -4,7 +4,8 @@ import {
   getIdeaCategories, createIdeaCategory, updateIdeaCategory, deleteIdeaCategory,
   getIdeas, searchIdeas, createIdea, updateIdea, updateIdeaRating, deleteIdea,
   getIdeaAttachments, uploadIdeaAttachment, deleteIdeaAttachment, getIdeaAttachmentDownloadUrl,
-  type IdeaCategory, type Idea, type IdeaAttachment,
+  getIdeaComments, createIdeaComment, updateIdeaComment, deleteIdeaComment,
+  type IdeaCategory, type Idea, type IdeaAttachment, type IdeaComment,
 } from './api';
 import './App.css';
 
@@ -60,6 +61,13 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const attachInputRef = useRef<HTMLInputElement>(null);
+
+  // Comments
+  const [comments, setComments] = useState<IdeaComment[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [submittingComment, setSubmittingComment] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+  const [editingCommentContent, setEditingCommentContent] = useState('');
 
   // ── Theme ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -171,7 +179,11 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     setModalMode('read');
     setModalOpen(true);
     setAttachments([]);
+    setComments([]);
+    setNewComment('');
+    setEditingCommentId(null);
     getIdeaAttachments(idea.id).then(res => setAttachments(res.data)).catch(() => {});
+    getIdeaComments(idea.id).then(res => setComments(res.data)).catch(() => {});
   };
 
   const openNewModal = () => {
@@ -369,6 +381,43 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  // ── Comment handlers ───────────────────────────────────────────────────────
+  const handleAddComment = async () => {
+    if (!modalIdea || !newComment.trim()) return;
+    setSubmittingComment(true);
+    try {
+      const res = await createIdeaComment(modalIdea.id, newComment.trim());
+      setComments(prev => [...prev, res.data]);
+      setNewComment('');
+    } catch {
+      alert('评论发送失败，请重试。');
+    } finally {
+      setSubmittingComment(false);
+    }
+  };
+
+  const handleUpdateComment = async (commentId: number) => {
+    if (!modalIdea || !editingCommentContent.trim()) return;
+    try {
+      const res = await updateIdeaComment(modalIdea.id, commentId, editingCommentContent.trim());
+      setComments(prev => prev.map(c => c.id === commentId ? res.data : c));
+      setEditingCommentId(null);
+      setEditingCommentContent('');
+    } catch {
+      alert('评论更新失败。');
+    }
+  };
+
+  const handleDeleteComment = async (commentId: number) => {
+    if (!modalIdea || !window.confirm('确定删除该评论？')) return;
+    try {
+      await deleteIdeaComment(modalIdea.id, commentId);
+      setComments(prev => prev.filter(c => c.id !== commentId));
+    } catch {
+      alert('评论删除失败。');
+    }
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -696,31 +745,131 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
 
             <div className="rp-modal-body">
               {modalMode === 'read' ? (
-                <div className="rp-modal-read-content doc-read-view">
-                  <DocEditor value={modalIdea?.content || ''} onChange={() => {}} readonly />
+                /* ── Read mode: one unified scroll container ── */
+                <div className="rp-modal-read-scroll">
+                  <div className="rp-modal-read-content doc-read-view">
+                    <DocEditor value={modalIdea?.content || ''} onChange={() => {}} readonly />
+                  </div>
+
+                  {/* Attachments – read mode */}
+                  {attachments.length > 0 && (
+                    <div className="idea-attachments-section">
+                      <div className="idea-attachments-header">
+                        <span className="idea-attachments-title">📎 附件 ({attachments.length})</span>
+                      </div>
+                      <div className="idea-attachments-list">
+                        {attachments.map(att => (
+                          <div key={att.id} className="idea-attachment-item">
+                            <a
+                              href={getIdeaAttachmentDownloadUrl(att.ideaId, att.id)}
+                              className="idea-attachment-link"
+                              download={att.fileName}
+                              title={`下载 ${att.fileName}`}
+                            >
+                              <span className="idea-attachment-icon">📄</span>
+                              <span className="idea-attachment-name">{att.fileName}</span>
+                              <span className="idea-attachment-size">{formatFileSize(att.fileSize)}</span>
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Comments – read mode */}
+                  {modalIdea && (
+                    <div className="idea-comments-section">
+                      <div className="idea-comments-header">
+                        <span className="idea-comments-title">💬 评论{comments.length > 0 ? ` (${comments.length})` : ''}</span>
+                      </div>
+
+                      {comments.length > 0 && (
+                        <div className="idea-comments-list">
+                          {comments.map(comment => (
+                            <div key={comment.id} className="idea-comment-item">
+                              {editingCommentId === comment.id ? (
+                                <div className="idea-comment-edit-wrap">
+                                  <textarea
+                                    className="idea-comment-edit-textarea"
+                                    value={editingCommentContent}
+                                    onChange={e => setEditingCommentContent(e.target.value)}
+                                    autoFocus
+                                  />
+                                  <div className="idea-comment-edit-actions">
+                                    <button className="small-btn" onClick={() => handleUpdateComment(comment.id)}>保存</button>
+                                    <button className="small-btn" onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}>取消</button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="idea-comment-content">{comment.content}</div>
+                                  <div className="idea-comment-meta">
+                                    <span className="idea-comment-time">
+                                      {new Date(comment.createdAt).toLocaleString('zh-CN')}
+                                      {comment.updatedAt !== comment.createdAt && ' (已编辑)'}
+                                    </span>
+                                    <div className="idea-comment-actions">
+                                      <button
+                                        className="idea-comment-action-btn"
+                                        title="编辑"
+                                        onClick={() => { setEditingCommentId(comment.id); setEditingCommentContent(comment.content); }}
+                                      >✎</button>
+                                      <button
+                                        className="idea-comment-action-btn danger"
+                                        title="删除"
+                                        onClick={() => handleDeleteComment(comment.id)}
+                                      >✕</button>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="idea-comment-input-wrap">
+                        <textarea
+                          className="idea-comment-textarea"
+                          placeholder="写下你的评论…"
+                          value={newComment}
+                          onChange={e => setNewComment(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment();
+                          }}
+                          rows={2}
+                        />
+                        <button
+                          className="idea-comment-submit-btn"
+                          onClick={handleAddComment}
+                          disabled={submittingComment || !newComment.trim()}
+                        >
+                          {submittingComment ? '发送中…' : '发送'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="rp-modal-editor-wrap">
-                  <DocEditor
-                    ref={docEditorRef}
-                    value={editContent}
-                    onChange={v => { editContentRef.current = v; setEditContent(v); }}
-                  />
-                </div>
-              )}
+                /* ── Edit mode: editor + attachments ── */
+                <>
+                  <div className="rp-modal-editor-wrap">
+                    <DocEditor
+                      ref={docEditorRef}
+                      value={editContent}
+                      onChange={v => { editContentRef.current = v; setEditContent(v); }}
+                    />
+                  </div>
 
-              {/* ── Attachments Section ── */}
-              {(modalMode === 'read' ? attachments.length > 0 : !!modalIdea) && (
-                <div
-                  className={`idea-attachments-section${modalMode === 'edit' && dragOver ? ' drag-over' : ''}`}
-                  onDrop={modalMode === 'edit' ? handleDrop : undefined}
-                  onDragOver={modalMode === 'edit' ? handleDragOver : undefined}
-                  onDragLeave={modalMode === 'edit' ? handleDragLeave : undefined}
-                >
-                  <div className="idea-attachments-header">
-                    <span className="idea-attachments-title">📎 附件{attachments.length > 0 ? ` (${attachments.length})` : ''}</span>
-                    {modalMode === 'edit' && modalIdea && (
-                      <>
+                  {!!modalIdea && (
+                    <div
+                      className={`idea-attachments-section${dragOver ? ' drag-over' : ''}`}
+                      onDrop={handleDrop}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                    >
+                      <div className="idea-attachments-header">
+                        <span className="idea-attachments-title">📎 附件{attachments.length > 0 ? ` (${attachments.length})` : ''}</span>
                         <button
                           className="idea-attach-upload-btn"
                           onClick={() => attachInputRef.current?.click()}
@@ -734,39 +883,37 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
                           style={{ display: 'none' }}
                           onChange={handleAttachmentUpload}
                         />
-                      </>
-                    )}
-                  </div>
-                  {attachments.length > 0 && (
-                    <div className="idea-attachments-list">
-                      {attachments.map(att => (
-                        <div key={att.id} className="idea-attachment-item">
-                          <a
-                            href={getIdeaAttachmentDownloadUrl(att.ideaId, att.id)}
-                            className="idea-attachment-link"
-                            download={att.fileName}
-                            title={`下载 ${att.fileName}`}
-                          >
-                            <span className="idea-attachment-icon">📄</span>
-                            <span className="idea-attachment-name">{att.fileName}</span>
-                            <span className="idea-attachment-size">{formatFileSize(att.fileSize)}</span>
-                          </a>
-                          {modalMode === 'edit' && (
-                            <button
-                              className="chip-edit-btn"
-                              style={{ color: 'var(--danger)' }}
-                              title="删除附件"
-                              onClick={() => handleAttachmentDelete(att)}
-                            >✕</button>
-                          )}
+                      </div>
+                      {attachments.length > 0 && (
+                        <div className="idea-attachments-list">
+                          {attachments.map(att => (
+                            <div key={att.id} className="idea-attachment-item">
+                              <a
+                                href={getIdeaAttachmentDownloadUrl(att.ideaId, att.id)}
+                                className="idea-attachment-link"
+                                download={att.fileName}
+                                title={`下载 ${att.fileName}`}
+                              >
+                                <span className="idea-attachment-icon">📄</span>
+                                <span className="idea-attachment-name">{att.fileName}</span>
+                                <span className="idea-attachment-size">{formatFileSize(att.fileSize)}</span>
+                              </a>
+                              <button
+                                className="chip-edit-btn"
+                                style={{ color: 'var(--danger)' }}
+                                title="删除附件"
+                                onClick={() => handleAttachmentDelete(att)}
+                              >✕</button>
+                            </div>
+                          ))}
                         </div>
-                      ))}
+                      )}
+                      {attachments.length === 0 && (
+                        <div className="idea-attachments-empty">将文件拖拽到此处，或点击上方按钮上传</div>
+                      )}
                     </div>
                   )}
-                  {modalMode === 'edit' && attachments.length === 0 && (
-                    <div className="idea-attachments-empty">将文件拖拽到此处，或点击上方按钮上传</div>
-                  )}
-                </div>
+                </>
               )}
             </div>
 

@@ -4371,6 +4371,19 @@ body {
   min-height: 0;
 }
 
+/* Read mode: single unified scroll container */
+.rp-modal-read-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+/* When inside the unified scroll wrapper, the content div should not scroll independently */
+.rp-modal-read-scroll .rp-modal-read-content {
+  overflow-y: visible;
+}
+
 .rp-modal-read-content {
   flex: 1;
   overflow-y: auto;
@@ -7143,4 +7156,161 @@ textarea.val-form-input { resize: vertical; line-height: 1.5; }
 .idea-attachments-section.drag-over .idea-attachments-empty {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* ── Idea Comments ─────────────────────────────────────────────────── */
+.idea-comments-section {
+  border-top: 1.5px solid var(--border);
+  margin-top: 18px;
+  padding: 16px 18px 12px;
+  background: var(--panel-bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-left: 2px;
+  margin-right: 2px;
+}
+.idea-comments-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.idea-comments-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+.idea-comments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.idea-comment-item {
+  padding: 10px 14px;
+  border-radius: 7px;
+  background: var(--hover-bg);
+  border: 1px solid transparent;
+  transition: all 0.15s;
+}
+.idea-comment-item:hover {
+  border-color: var(--border-bright);
+}
+.idea-comment-content {
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.idea-comment-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.idea-comment-time {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.idea-comment-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.idea-comment-item:hover .idea-comment-actions {
+  opacity: 1;
+}
+.idea-comment-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.78rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  transition: all 0.12s;
+  font-family: inherit;
+}
+.idea-comment-action-btn:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+.idea-comment-action-btn.danger:hover {
+  color: var(--danger);
+}
+.idea-comment-edit-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.idea-comment-edit-textarea {
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.idea-comment-edit-textarea:focus {
+  border-color: var(--accent);
+}
+.idea-comment-edit-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+.idea-comment-input-wrap {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.idea-comment-textarea {
+  flex: 1;
+  min-height: 42px;
+  max-height: 120px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.idea-comment-textarea:focus {
+  border-color: var(--accent);
+}
+.idea-comment-textarea::placeholder {
+  color: var(--text-muted);
+}
+.idea-comment-submit-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.idea-comment-submit-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+.idea-comment-submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
