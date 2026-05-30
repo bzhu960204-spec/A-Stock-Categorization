@@ -8,6 +8,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Table, TableHeader, TableCell } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import { InlineMath, BlockMath } from '@tiptap/extension-mathematics';
+import katex from 'katex';
 import 'katex/dist/katex.min.css';
 
 // ── Resizable Image NodeView ──────────────────────────────────────────────────
@@ -77,6 +78,22 @@ const ResizableImage = Image.extend({
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+// In LaTeX/KaTeX several characters have special meaning:
+//   '%' = comment (everything after it on the line is ignored)
+//   '&' = column separator (in alignment/table environments)
+// Users commonly type these literally (e.g. "65.1%", "Cash & Investments").
+// We auto-escape them so KaTeX renders the formulas correctly.
+function sanitizeLatex(raw: string): string {
+  // 1) Escape unescaped '%' everywhere
+  let result = raw.replace(/(?<!\\)%/g, '\\%');
+  // 2) Escape unescaped '&' inside \text{...} blocks (where it's always literal)
+  result = result.replace(/\\text\s*\{([^}]*)\}/g, (_, content: string) => {
+    return `\\text{${content.replace(/(?<!\\)&/g, '\\&')}}`;
+  });
+  return result;
+}
+
 // ── InlineMath with corrected InputRule range ─────────────────────────────────
 // Tiptap triggers InputRules on Enter with text='\n'. The default range formula
 // `from - (match[0].length - text.length)` is off-by-1 in that case because
@@ -95,7 +112,7 @@ const FixedInlineMath = InlineMath.extend({
       new InputRule({
         find: /(?<!\$)(\$\$([^$\n]+?)\$\$)(?!\$)/,
         handler: ({ state, range, match }) => {
-          const latex = match[2];
+          const latex = sanitizeLatex(match[2] ?? '');
           if (!latex) return;
           const { tr } = state;
           const blockStart = state.doc.resolve(range.to).start();
@@ -107,7 +124,7 @@ const FixedInlineMath = InlineMath.extend({
       new InputRule({
         find: /(?<!\$)\$([^$\n]+?)\$(?!\$)/,
         handler: ({ state, range, match }) => {
-          const latex = match[1];
+          const latex = sanitizeLatex(match[1] ?? '');
           if (!latex) return;
           const { tr } = state;
           const blockStart = state.doc.resolve(range.to).start();
@@ -116,6 +133,57 @@ const FixedInlineMath = InlineMath.extend({
         },
       }),
     ];
+  },
+  addNodeView() {
+    const katexOptions = this.options.katexOptions;
+    return ({ node }) => {
+      const wrapper = document.createElement('span');
+      wrapper.className = 'tiptap-mathematics-render';
+      if (this.editor.isEditable) {
+        wrapper.classList.add('tiptap-mathematics-render--editable');
+      }
+      wrapper.dataset.type = 'inline-math';
+      wrapper.setAttribute('data-latex', node.attrs.latex);
+      try {
+        katex.render(sanitizeLatex(node.attrs.latex), wrapper, katexOptions);
+      } catch {
+        wrapper.textContent = node.attrs.latex;
+        wrapper.classList.add('inline-math-error');
+      }
+      return { dom: wrapper };
+    };
+  },
+});
+
+// ── BlockMath with % sanitization ─────────────────────────────────────────────
+const FixedBlockMath = BlockMath.extend({
+  addOptions() {
+    return {
+      ...this.parent?.(),
+      katexOptions: { throwOnError: false },
+    };
+  },
+  addNodeView() {
+    const katexOptions = this.options.katexOptions;
+    return ({ node }) => {
+      const wrapper = document.createElement('div');
+      const innerWrapper = document.createElement('div');
+      wrapper.className = 'tiptap-mathematics-render';
+      if (this.editor.isEditable) {
+        wrapper.classList.add('tiptap-mathematics-render--editable');
+      }
+      innerWrapper.className = 'block-math-inner';
+      wrapper.dataset.type = 'block-math';
+      wrapper.setAttribute('data-latex', node.attrs.latex);
+      wrapper.appendChild(innerWrapper);
+      try {
+        katex.render(sanitizeLatex(node.attrs.latex), innerWrapper, katexOptions);
+      } catch {
+        wrapper.textContent = node.attrs.latex;
+        wrapper.classList.add('block-math-error');
+      }
+      return { dom: wrapper };
+    };
   },
 });
 // ─────────────────────────────────────────────────────────────────────────────
@@ -145,7 +213,7 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
         TableHeader,
         TableCell,
         FixedInlineMath,
-        BlockMath,
+        FixedBlockMath,
       ],
       content: value || '',
       // Always start editable so NodeViews (KaTeX) initialize properly.
