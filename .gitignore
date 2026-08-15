@@ -11,8 +11,9 @@ valuation-import-*.json
 # ===== Backend =====
 backend/target/
 
-# 数据库文件保留（不 ignore）
-# backend/data/stockdb.mv.db  ← 会上传到 GitHub
+# 数据库文件（已通过 Junction 链接到 OneDrive/ProjectData，不纳入 Git）
+backend/data/
+backend/data
 
 # ===== IDE =====
 .idea/
