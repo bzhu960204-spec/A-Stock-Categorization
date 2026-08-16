@@ -2,13 +2,11 @@ package com.stockcard.controller;
 
 import com.stockcard.entity.Sector;
 import com.stockcard.entity.SectorReport;
-import com.stockcard.repository.SectorRepository;
-import com.stockcard.repository.SectorReportRepository;
+import com.stockcard.service.ResearchService;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,14 +17,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ResearchController {
 
-    private final SectorRepository sectorRepository;
-    private final SectorReportRepository sectorReportRepository;
+    private final ResearchService researchService;
 
     // ===== Sector APIs =====
 
     @GetMapping("/sectors")
     public List<Sector> getAllSectors() {
-        return sectorRepository.findAll();
+        return researchService.getAllSectors();
     }
 
     @PostMapping("/sectors")
@@ -34,37 +31,25 @@ public class ResearchController {
         if (sector.getName() == null || sector.getName().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        if (sectorRepository.existsByName(sector.getName().trim())) {
-            return ResponseEntity.status(409).build();
-        }
-        sector.setName(sector.getName().trim());
-        return ResponseEntity.ok(sectorRepository.save(sector));
+        return researchService.createSector(sector)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(409).build());
     }
 
     @PutMapping("/sectors/{id}")
     public ResponseEntity<Sector> updateSector(@PathVariable Long id, @RequestBody Sector payload) {
-        return sectorRepository.findById(id)
-                .map(sector -> {
-                    if (payload.getName() != null && !payload.getName().isBlank()) {
-                        sector.setName(payload.getName().trim());
-                    }
-                    return ResponseEntity.ok(sectorRepository.save(sector));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return researchService.updateSector(id, payload.getName())
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/sectors/{id}")
-    @Transactional
     public ResponseEntity<Void> deleteSector(@PathVariable Long id) {
-        if (!sectorRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        long reportCount = sectorReportRepository.countBySectorId(id);
-        if (reportCount > 0) {
-            return ResponseEntity.status(409).build();
-        }
-        sectorRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+        return switch (researchService.deleteSector(id)) {
+            case NOT_FOUND -> ResponseEntity.notFound().build();
+            case HAS_REPORTS -> ResponseEntity.status(409).build();
+            case DELETED -> ResponseEntity.ok().build();
+        };
     }
 
     // ===== SectorReport APIs =====
@@ -119,12 +104,9 @@ public class ResearchController {
 
     @GetMapping("/sectors/{sectorId}/reports")
     public ResponseEntity<List<ReportDto>> getReports(@PathVariable Long sectorId) {
-        if (!sectorRepository.existsById(sectorId)) {
-            return ResponseEntity.notFound().build();
-        }
-        List<ReportDto> dtos = sectorReportRepository.findBySectorIdOrderByCreatedAtDesc(sectorId)
-                .stream().map(ReportDto::from).collect(Collectors.toList());
-        return ResponseEntity.ok(dtos);
+        return researchService.getReports(sectorId)
+                .map(list -> ResponseEntity.ok(list.stream().map(ReportDto::from).collect(Collectors.toList())))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/sectors/{sectorId}/reports")
@@ -132,19 +114,10 @@ public class ResearchController {
         if (payload.getTitle() == null || payload.getTitle().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        return sectorRepository.findById(sectorId)
-                .map(sector -> {
-                    SectorReport report = new SectorReport();
-                    report.setSector(sector);
-                    report.setTitle(payload.getTitle().trim());
-                    report.setContent(payload.getContent());
-                    report.setSource(payload.getSource());
-                    report.setReportDate(payload.getReportDate());
-                    report.setCategory(payload.getCategory());
-                    if (payload.getRating() != null) report.setRating(Math.max(0, Math.min(5, payload.getRating())));
-                    return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return researchService.createReport(sectorId, payload.getTitle(), payload.getContent(),
+                        payload.getSource(), payload.getReportDate(), payload.getCategory(), payload.getRating())
+                .map(report -> ResponseEntity.ok(ReportDto.from(report)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PutMapping("/sectors/{sectorId}/reports/{reportId}")
@@ -152,20 +125,10 @@ public class ResearchController {
             @PathVariable Long sectorId,
             @PathVariable Long reportId,
             @RequestBody ReportPayload payload) {
-        return sectorReportRepository.findById(reportId)
-                .filter(r -> r.getSector().getId().equals(sectorId))
-                .map(report -> {
-                    if (payload.getTitle() != null && !payload.getTitle().isBlank()) {
-                        report.setTitle(payload.getTitle().trim());
-                    }
-                    report.setContent(payload.getContent());
-                    report.setSource(payload.getSource());
-                    report.setReportDate(payload.getReportDate());
-                    report.setCategory(payload.getCategory());
-                    if (payload.getRating() != null) report.setRating(Math.max(0, Math.min(5, payload.getRating())));
-                    return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return researchService.updateReport(sectorId, reportId, payload.getTitle(), payload.getContent(),
+                        payload.getSource(), payload.getReportDate(), payload.getCategory(), payload.getRating())
+                .map(report -> ResponseEntity.ok(ReportDto.from(report)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PatchMapping("/sectors/{sectorId}/reports/{reportId}/rating")
@@ -176,24 +139,16 @@ public class ResearchController {
         if (payload.getRating() == null || payload.getRating() < 0 || payload.getRating() > 5) {
             return ResponseEntity.badRequest().build();
         }
-        return sectorReportRepository.findById(reportId)
-                .filter(r -> r.getSector().getId().equals(sectorId))
-                .map(report -> {
-                    report.setRating(payload.getRating());
-                    return ResponseEntity.ok(ReportDto.from(sectorReportRepository.save(report)));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return researchService.updateReportRating(sectorId, reportId, payload.getRating())
+                .map(report -> ResponseEntity.ok(ReportDto.from(report)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/sectors/{sectorId}/reports/{reportId}")
     public ResponseEntity<Void> deleteReport(@PathVariable Long sectorId, @PathVariable Long reportId) {
-        return sectorReportRepository.findById(reportId)
-                .filter(r -> r.getSector().getId().equals(sectorId))
-                .map(report -> {
-                    sectorReportRepository.delete(report);
-                    return ResponseEntity.ok().<Void>build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return researchService.deleteReport(sectorId, reportId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
     }
 
     // ===== Global search across all sectors =====
@@ -201,16 +156,6 @@ public class ResearchController {
     public List<ReportDto> searchReports(@RequestParam String keyword) {
         String kw = keyword.trim().toLowerCase();
         if (kw.isEmpty()) return List.of();
-        return sectorReportRepository.findAll().stream()
-                .filter(r -> containsIgnoreCase(r.getTitle(), kw)
-                          || containsIgnoreCase(r.getContent(), kw)
-                          || containsIgnoreCase(r.getSource(), kw))
-                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                .map(ReportDto::from)
-                .collect(Collectors.toList());
-    }
-
-    private static boolean containsIgnoreCase(String field, String kw) {
-        return field != null && field.toLowerCase().contains(kw);
+        return researchService.searchReports(kw).stream().map(ReportDto::from).collect(Collectors.toList());
     }
 }

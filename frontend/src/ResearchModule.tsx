@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useDarkMode } from './useDarkMode';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
   getSectors, createSector, updateSector, deleteSector,
@@ -13,7 +14,7 @@ interface ResearchModuleProps {
 }
 
 export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [darkMode, setDarkMode] = useDarkMode();
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
   const [reports, setReports] = useState<SectorReport[]>([]);
@@ -54,11 +55,6 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const [saveError, setSaveError] = useState('');
 
   const docEditorRef = useRef<DocEditorHandle>(null);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-    localStorage.setItem('darkMode', String(darkMode));
-  }, [darkMode]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && modalOpen && modalMode !== 'edit') closeModal(); };

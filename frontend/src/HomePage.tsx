@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useDarkMode } from './useDarkMode';
 import type { ModuleId } from './Root';
 import { getConfig, saveConfig } from './api';
 
@@ -91,20 +92,13 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onSelectModule }: HomePageProps) {
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('darkMode') === 'true';
-  });
+  const [darkMode, setDarkMode] = useDarkMode();
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [apiKeySaving, setApiKeySaving] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [apiKeyError, setApiKeyError] = useState('');
   const settingsRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-    localStorage.setItem('darkMode', String(darkMode));
-  }, [darkMode]);
 
   useEffect(() => {
     if (!showSettings) return;

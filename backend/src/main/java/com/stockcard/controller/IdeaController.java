@@ -4,23 +4,20 @@ import com.stockcard.entity.Idea;
 import com.stockcard.entity.IdeaAttachment;
 import com.stockcard.entity.IdeaCategory;
 import com.stockcard.entity.IdeaComment;
-import com.stockcard.repository.IdeaAttachmentRepository;
-import com.stockcard.repository.IdeaCategoryRepository;
-import com.stockcard.repository.IdeaCommentRepository;
-import com.stockcard.repository.IdeaRepository;
+import com.stockcard.service.IdeaService;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -28,10 +25,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class IdeaController {
 
-    private final IdeaCategoryRepository categoryRepository;
-    private final IdeaRepository ideaRepository;
-    private final IdeaAttachmentRepository attachmentRepository;
-    private final IdeaCommentRepository commentRepository;
+    private final IdeaService ideaService;
 
     // ── DTOs ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +76,7 @@ public class IdeaController {
 
     @GetMapping("/categories")
     public List<IdeaCategory> getAllCategories() {
-        return categoryRepository.findAll();
+        return ideaService.getAllCategories();
     }
 
     @PostMapping("/categories")
@@ -90,60 +84,39 @@ public class IdeaController {
         if (payload.getName() == null || payload.getName().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        String name = payload.getName().trim();
-        if (categoryRepository.existsByName(name)) {
-            return ResponseEntity.status(409).build();
-        }
-        IdeaCategory cat = new IdeaCategory();
-        cat.setName(name);
-        return ResponseEntity.ok(categoryRepository.save(cat));
+        return ideaService.createCategory(payload.getName().trim())
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.status(409).build());
     }
 
     @PutMapping("/categories/{id}")
     public ResponseEntity<IdeaCategory> updateCategory(@PathVariable Long id, @RequestBody CategoryPayload payload) {
-        return categoryRepository.findById(id)
-                .map(cat -> {
-                    if (payload.getName() != null && !payload.getName().isBlank()) {
-                        cat.setName(payload.getName().trim());
-                    }
-                    return ResponseEntity.ok(categoryRepository.save(cat));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.updateCategory(id, payload.getName())
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/categories/{id}")
-    @Transactional
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
-        if (!categoryRepository.existsById(id)) {
-            return ResponseEntity.notFound().build();
-        }
-        if (ideaRepository.countByCategoryId(id) > 0) {
-            return ResponseEntity.status(409).build();
-        }
-        categoryRepository.deleteById(id);
-        return ResponseEntity.ok().build();
+        return switch (ideaService.deleteCategory(id)) {
+            case NOT_FOUND -> ResponseEntity.notFound().build();
+            case HAS_IDEAS -> ResponseEntity.status(409).build();
+            case DELETED -> ResponseEntity.ok().build();
+        };
     }
 
     // ── Idea endpoints ────────────────────────────────────────────────────────
 
     @GetMapping
     public List<IdeaDto> getAllIdeas(@RequestParam(required = false) Long categoryId) {
-        if (categoryId != null) {
-            return ideaRepository.findByCategoryIdOrderByCreatedAtDesc(categoryId)
-                    .stream().map(IdeaDto::from).collect(Collectors.toList());
-        }
-        return ideaRepository.findAllByOrderByCreatedAtDesc()
-                .stream().map(IdeaDto::from).collect(Collectors.toList());
+        return ideaService.getAll(categoryId).stream().map(IdeaDto::from).collect(Collectors.toList());
     }
 
     @GetMapping("/search")
     public List<IdeaDto> search(@RequestParam String keyword) {
         String kw = keyword.trim().toLowerCase();
         if (kw.isEmpty()) return List.of();
-        return ideaRepository.findAllByOrderByCreatedAtDesc().stream()
-                .filter(i -> containsIgnoreCase(i.getTitle(), kw) || containsIgnoreCase(i.getContent(), kw))
-                .map(IdeaDto::from)
-                .collect(Collectors.toList());
+        return ideaService.search("%" + kw + "%").stream().map(IdeaDto::from).collect(Collectors.toList());
     }
 
     @PostMapping
@@ -151,35 +124,17 @@ public class IdeaController {
         if (payload.getTitle() == null || payload.getTitle().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        Idea idea = new Idea();
-        idea.setTitle(payload.getTitle().trim());
-        idea.setContent(payload.getContent());
-        idea.setSubCategory(payload.getSubCategory());
-        if (payload.getRating() != null) idea.setRating(Math.max(0, Math.min(5, payload.getRating())));
-        if (payload.getCategoryId() != null) {
-            categoryRepository.findById(payload.getCategoryId()).ifPresent(idea::setCategory);
-        }
-        return ResponseEntity.ok(IdeaDto.from(ideaRepository.save(idea)));
+        Idea saved = ideaService.create(payload.getTitle(), payload.getContent(),
+                payload.getSubCategory(), payload.getRating(), payload.getCategoryId());
+        return ResponseEntity.ok(IdeaDto.from(saved));
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<IdeaDto> updateIdea(@PathVariable Long id, @RequestBody IdeaPayload payload) {
-        return ideaRepository.findById(id)
-                .map(idea -> {
-                    if (payload.getTitle() != null && !payload.getTitle().isBlank()) {
-                        idea.setTitle(payload.getTitle().trim());
-                    }
-                    idea.setContent(payload.getContent());
-                    idea.setSubCategory(payload.getSubCategory());
-                    if (payload.getRating() != null) idea.setRating(Math.max(0, Math.min(5, payload.getRating())));
-                    if (payload.getCategoryId() != null) {
-                        categoryRepository.findById(payload.getCategoryId()).ifPresent(idea::setCategory);
-                    } else {
-                        idea.setCategory(null);
-                    }
-                    return ResponseEntity.ok(IdeaDto.from(ideaRepository.save(idea)));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.update(id, payload.getTitle(), payload.getContent(),
+                        payload.getSubCategory(), payload.getRating(), payload.getCategoryId())
+                .map(idea -> ResponseEntity.ok(IdeaDto.from(idea)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Data
@@ -193,25 +148,16 @@ public class IdeaController {
         if (body.getRating() == null || body.getRating() < 0 || body.getRating() > 5) {
             return ResponseEntity.badRequest().build();
         }
-        return ideaRepository.findById(id)
-                .map(idea -> {
-                    idea.setRating(body.getRating());
-                    return ResponseEntity.ok(IdeaDto.from(ideaRepository.save(idea)));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.updateRating(id, body.getRating())
+                .map(idea -> ResponseEntity.ok(IdeaDto.from(idea)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{id}")
-    @Transactional
     public ResponseEntity<Void> deleteIdea(@PathVariable Long id) {
-        return ideaRepository.findById(id)
-                .map(idea -> {
-                    commentRepository.deleteByIdeaId(id);
-                    attachmentRepository.deleteByIdeaId(id);
-                    ideaRepository.delete(idea);
-                    return ResponseEntity.ok().<Void>build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.delete(id)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
     }
 
     // ── Attachment endpoints ──────────────────────────────────────────────────
@@ -239,31 +185,24 @@ public class IdeaController {
 
     @GetMapping("/{ideaId}/attachments")
     public ResponseEntity<List<AttachmentDto>> listAttachments(@PathVariable Long ideaId) {
-        if (!ideaRepository.existsById(ideaId)) {
-            return ResponseEntity.notFound().build();
-        }
-        List<AttachmentDto> list = attachmentRepository.findByIdeaIdOrderByCreatedAtDesc(ideaId)
-                .stream().map(AttachmentDto::from).collect(Collectors.toList());
-        return ResponseEntity.ok(list);
+        return ideaService.listAttachments(ideaId)
+                .map(list -> ResponseEntity.ok(list.stream().map(AttachmentDto::from).collect(Collectors.toList())))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping(value = "/{ideaId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<AttachmentDto> uploadAttachment(
             @PathVariable Long ideaId,
             @RequestParam("file") MultipartFile file) throws IOException {
-        if (!ideaRepository.existsById(ideaId)) {
+        if (!ideaService.ideaExists(ideaId)) {
             return ResponseEntity.notFound().build();
         }
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        IdeaAttachment attachment = new IdeaAttachment();
-        attachment.setIdeaId(ideaId);
-        attachment.setFileName(file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed");
-        attachment.setContentType(file.getContentType() != null ? file.getContentType() : "application/octet-stream");
-        attachment.setFileSize(file.getSize());
-        attachment.setData(file.getBytes());
-        IdeaAttachment saved = attachmentRepository.save(attachment);
+        String fileName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "unnamed";
+        String contentType = file.getContentType() != null ? file.getContentType() : "application/octet-stream";
+        IdeaAttachment saved = ideaService.saveAttachment(ideaId, fileName, contentType, file.getSize(), file.getBytes());
         return ResponseEntity.ok(AttachmentDto.from(saved));
     }
 
@@ -271,28 +210,28 @@ public class IdeaController {
     public ResponseEntity<byte[]> downloadAttachment(
             @PathVariable Long ideaId,
             @PathVariable Long attachmentId) {
-        return attachmentRepository.findById(attachmentId)
-                .filter(a -> a.getIdeaId().equals(ideaId))
-                .map(a -> ResponseEntity.ok()
-                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + a.getFileName() + "\"")
-                        .contentType(MediaType.parseMediaType(a.getContentType()))
-                        .contentLength(a.getFileSize())
-                        .body(a.getData()))
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.getAttachment(ideaId, attachmentId)
+                .map(a -> {
+                    String fileName = a.getFileName() == null || a.getFileName().isBlank() ? "attachment" : a.getFileName();
+                    ContentDisposition disposition = ContentDisposition.attachment()
+                            .filename(fileName, StandardCharsets.UTF_8)
+                            .build();
+                    return ResponseEntity.ok()
+                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+                            .contentType(MediaType.parseMediaType(a.getContentType()))
+                            .contentLength(a.getFileSize())
+                            .body(a.getData());
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{ideaId}/attachments/{attachmentId}")
-    @Transactional
     public ResponseEntity<Void> deleteAttachment(
             @PathVariable Long ideaId,
             @PathVariable Long attachmentId) {
-        return attachmentRepository.findById(attachmentId)
-                .filter(a -> a.getIdeaId().equals(ideaId))
-                .map(a -> {
-                    attachmentRepository.delete(a);
-                    return ResponseEntity.ok().<Void>build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.deleteAttachment(ideaId, attachmentId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
     }
 
     // ── Comment endpoints ─────────────────────────────────────────────────────
@@ -324,28 +263,22 @@ public class IdeaController {
 
     @GetMapping("/{ideaId}/comments")
     public ResponseEntity<List<CommentDto>> listComments(@PathVariable Long ideaId) {
-        if (!ideaRepository.existsById(ideaId)) {
-            return ResponseEntity.notFound().build();
-        }
-        List<CommentDto> list = commentRepository.findByIdeaIdOrderByCreatedAtAsc(ideaId)
-                .stream().map(CommentDto::from).collect(Collectors.toList());
-        return ResponseEntity.ok(list);
+        return ideaService.listComments(ideaId)
+                .map(list -> ResponseEntity.ok(list.stream().map(CommentDto::from).collect(Collectors.toList())))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PostMapping("/{ideaId}/comments")
     public ResponseEntity<CommentDto> createComment(
             @PathVariable Long ideaId,
             @RequestBody CommentPayload payload) {
-        if (!ideaRepository.existsById(ideaId)) {
+        if (!ideaService.ideaExists(ideaId)) {
             return ResponseEntity.notFound().build();
         }
         if (payload.getContent() == null || payload.getContent().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
-        IdeaComment comment = new IdeaComment();
-        comment.setIdeaId(ideaId);
-        comment.setContent(payload.getContent());
-        return ResponseEntity.ok(CommentDto.from(commentRepository.save(comment)));
+        return ResponseEntity.ok(CommentDto.from(ideaService.createComment(ideaId, payload.getContent())));
     }
 
     @PutMapping("/{ideaId}/comments/{commentId}")
@@ -353,34 +286,18 @@ public class IdeaController {
             @PathVariable Long ideaId,
             @PathVariable Long commentId,
             @RequestBody CommentPayload payload) {
-        return commentRepository.findById(commentId)
-                .filter(c -> c.getIdeaId().equals(ideaId))
-                .map(c -> {
-                    if (payload.getContent() != null && !payload.getContent().isBlank()) {
-                        c.setContent(payload.getContent());
-                    }
-                    return ResponseEntity.ok(CommentDto.from(commentRepository.save(c)));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.updateComment(ideaId, commentId, payload.getContent())
+                .map(c -> ResponseEntity.ok(CommentDto.from(c)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @DeleteMapping("/{ideaId}/comments/{commentId}")
-    @Transactional
     public ResponseEntity<Void> deleteComment(
             @PathVariable Long ideaId,
             @PathVariable Long commentId) {
-        return commentRepository.findById(commentId)
-                .filter(c -> c.getIdeaId().equals(ideaId))
-                .map(c -> {
-                    commentRepository.delete(c);
-                    return ResponseEntity.ok().<Void>build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+        return ideaService.deleteComment(ideaId, commentId)
+                ? ResponseEntity.ok().build()
+                : ResponseEntity.notFound().build();
     }
 
-    // ── helpers ───────────────────────────────────────────────────────────────
-
-    private static boolean containsIgnoreCase(String text, String kw) {
-        return text != null && text.toLowerCase().contains(kw);
-    }
 }

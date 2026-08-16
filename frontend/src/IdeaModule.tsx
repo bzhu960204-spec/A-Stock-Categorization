@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useDarkMode } from './useDarkMode';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
+import CategorySidebar from './CategorySidebar';
 import {
   getIdeaCategories, createIdeaCategory, updateIdeaCategory, deleteIdeaCategory,
   getIdeas, searchIdeas, createIdea, updateIdea, updateIdeaRating, deleteIdea,
@@ -14,7 +16,7 @@ interface IdeaModuleProps {
 }
 
 export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [darkMode, setDarkMode] = useDarkMode();
   const [categories, setCategories] = useState<IdeaCategory[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(false);
@@ -24,12 +26,6 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
 
   // Star filter: 0 = all, 1-5 = at least N stars
   const [starFilter, setStarFilter] = useState(0);
-
-  // Category management
-  const [showAddCat, setShowAddCat] = useState(false);
-  const [newCatName, setNewCatName] = useState('');
-  const [editingCat, setEditingCat] = useState<IdeaCategory | null>(null);
-  const [editCatName, setEditCatName] = useState('');
 
   // Search
   const [search, setSearch] = useState('');
@@ -69,11 +65,6 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
   const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
   const [editingCommentContent, setEditingCommentContent] = useState('');
 
-  // ── Theme ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-    localStorage.setItem('darkMode', String(darkMode));
-  }, [darkMode]);
 
   // ── ESC closes modal (blocked in edit mode to prevent data loss) ──────────
   useEffect(() => {
@@ -136,18 +127,13 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
   }, [ideas, search, searchResults, starFilter, subCategoryFilter]);
 
   // ── Category CRUD ─────────────────────────────────────────────────────────
-  const handleAddCat = async () => {
-    if (!newCatName.trim()) return;
-    await createIdeaCategory({ name: newCatName.trim() });
-    setNewCatName('');
-    setShowAddCat(false);
+  const handleAddCat = async (name: string) => {
+    await createIdeaCategory({ name });
     await loadCategories();
   };
 
-  const handleUpdateCat = async () => {
-    if (!editingCat || !editCatName.trim()) return;
-    await updateIdeaCategory(editingCat.id, { name: editCatName.trim() });
-    setEditingCat(null);
+  const handleUpdateCat = async (id: number, name: string) => {
+    await updateIdeaCategory(id, { name });
     await loadCategories();
   };
 
@@ -437,81 +423,14 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
 
       <main className="main-layout">
         {/* ── Sidebar ── */}
-        <aside className="glass-sidebar idea-sidebar">
-          <div className="sidebar-section">
-            <div className="section-header">
-              <h3>分类</h3>
-              <button className="small-btn" title="新增分类" onClick={() => setShowAddCat(true)}>+</button>
-            </div>
-
-            {showAddCat && (
-              <div className="inline-add-row">
-                <input
-                  className="inline-input"
-                  placeholder="分类名称"
-                  value={newCatName}
-                  onChange={e => setNewCatName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleAddCat();
-                    if (e.key === 'Escape') { setShowAddCat(false); setNewCatName(''); }
-                  }}
-                  autoFocus
-                />
-                <button className="small-btn" onClick={handleAddCat}>✓</button>
-                <button className="small-btn" onClick={() => { setShowAddCat(false); setNewCatName(''); }}>✕</button>
-              </div>
-            )}
-
-            <div className="category-list">
-              {/* All */}
-              <div className="category-chip-row">
-                <button
-                  className={`category-chip ${filter === null ? 'selected' : ''}`}
-                  style={{ '--chip-color': 'var(--accent)' } as React.CSSProperties}
-                  onClick={() => { setFilter(null); setSearch(''); }}
-                >
-                  <span className="chip-name">全部</span>
-                </button>
-              </div>
-
-              {/* Custom categories */}
-              {categories.map(cat => (
-                <div key={cat.id} className="category-chip-row">
-                  {editingCat?.id === cat.id ? (
-                    <div className="inline-add-row" style={{ flex: 1 }}>
-                      <input
-                        className="inline-input"
-                        value={editCatName}
-                        onChange={e => setEditCatName(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') handleUpdateCat();
-                          if (e.key === 'Escape') setEditingCat(null);
-                        }}
-                        autoFocus
-                      />
-                      <button className="small-btn" onClick={handleUpdateCat}>✓</button>
-                      <button className="small-btn" onClick={() => setEditingCat(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        className={`category-chip ${filter === cat.id ? 'selected' : ''}`}
-                        style={{ '--chip-color': 'var(--accent)' } as React.CSSProperties}
-                        onClick={() => { setFilter(cat.id); setSearch(''); }}
-                      >
-                        <span className="chip-name">{cat.name}</span>
-                      </button>
-                      <button className="chip-edit-btn" title="编辑"
-                        onClick={() => { setEditingCat(cat); setEditCatName(cat.name); }}>✎</button>
-                      <button className="chip-edit-btn" title="删除" style={{ color: 'var(--danger)' }}
-                        onClick={() => handleDeleteCat(cat)}>✕</button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </aside>
+        <CategorySidebar
+          categories={categories}
+          filter={filter}
+          onSelect={(id) => { setFilter(id); setSearch(''); }}
+          onAdd={handleAddCat}
+          onUpdate={handleUpdateCat}
+          onDelete={handleDeleteCat}
+        />
 
         {/* ── Main ── */}
         <div className="main-content">

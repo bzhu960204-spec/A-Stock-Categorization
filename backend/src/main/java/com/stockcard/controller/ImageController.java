@@ -1,9 +1,8 @@
 package com.stockcard.controller;
 
 import com.stockcard.entity.StockImage;
-import com.stockcard.repository.StockImageRepository;
+import com.stockcard.service.ImageService;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,10 +15,10 @@ import java.util.Map;
 @RequestMapping("/api/images")
 public class ImageController {
 
-    private final StockImageRepository repo;
+    private final ImageService imageService;
 
-    public ImageController(StockImageRepository repo) {
-        this.repo = repo;
+    public ImageController(ImageService imageService) {
+        this.imageService = imageService;
     }
 
     /** Upload an image; returns {"id": 42, "url": "/api/images/42"} */
@@ -29,10 +28,7 @@ public class ImageController {
         if (ct == null || !ct.startsWith("image/")) {
             return ResponseEntity.badRequest().build();
         }
-        StockImage img = new StockImage();
-        img.setContentType(ct);
-        img.setData(file.getBytes());
-        StockImage saved = repo.save(img);
+        StockImage saved = imageService.save(ct, file.getBytes());
         return ResponseEntity.ok(Map.of(
                 "id", saved.getId(),
                 "url", "/api/images/" + saved.getId()
@@ -42,11 +38,11 @@ public class ImageController {
     /** Serve an image by id */
     @GetMapping("/{id}")
     public ResponseEntity<byte[]> get(@PathVariable Long id) {
-        return repo.findById(id)
+        return imageService.get(id)
                 .map(img -> ResponseEntity.ok()
                         .header(HttpHeaders.CACHE_CONTROL, "public, max-age=31536000, immutable")
                         .contentType(MediaType.parseMediaType(img.getContentType()))
                         .body(img.getData()))
-                .orElse(ResponseEntity.notFound().build());
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 }

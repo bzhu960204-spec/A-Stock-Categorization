@@ -287,7 +287,7 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
       const current = editor.getHTML();
       const normalized = value || '';
       if (current !== normalized && normalized !== '<p></p>') {
-        editor.commands.setContent(normalized, false);
+        editor.commands.setContent(normalized, { emitUpdate: false });
       }
     }, [value, editor]);
 

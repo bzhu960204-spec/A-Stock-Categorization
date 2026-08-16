@@ -1,6 +1,23 @@
-import axios from 'axios';
+import axios, { type AxiosError } from 'axios';
 
 const API = axios.create({ baseURL: '/api' });
+
+/** Extracts a user-friendly message from an axios error (backend returns { message }). */
+export function getErrorMessage(err: unknown, fallback = '操作失败，请稍后重试'): string {
+  const axiosErr = err as AxiosError<{ message?: string }>;
+  if (axiosErr?.response?.data?.message) return axiosErr.response.data.message;
+  if (axiosErr?.message === 'Network Error') return '无法连接到服务器，请检查后端是否运行';
+  if (axiosErr?.message) return axiosErr.message;
+  return fallback;
+}
+
+API.interceptors.response.use(
+  (res) => res,
+  (error: AxiosError) => {
+    console.error('API error:', error.config?.url, getErrorMessage(error));
+    return Promise.reject(error);
+  }
+);
 
 export interface Category {
   id: number;
