@@ -43,6 +43,8 @@ export interface Stock {
   strengthsWeaknessesLegacy?: string;
   founderCeoHolding?: string;
   industryPosition?: string;
+  archived?: boolean;
+  archivedAt?: string;
   categories: Category[];
 }
 
@@ -110,6 +112,9 @@ export const uploadDocImage = async (file: File): Promise<string> => {
 export const filterStocks = (categoryIds: number[], mode: 'union' | 'intersection') =>
   API.get<Stock[]>('/stocks/filter', { params: { categoryIds: categoryIds.join(','), mode } });
 export const searchStocks = (keyword: string) => API.get<Stock[]>('/stocks/search', { params: { keyword } });
+export const getArchivedStocks = () => API.get<Stock[]>('/stocks/archived');
+export const archiveStock = (id: number) => API.patch<Stock>(`/stocks/${id}/archive`);
+export const unarchiveStock = (id: number) => API.patch<Stock>(`/stocks/${id}/unarchive`);
 
 // Category APIs
 export const getCategories = () => API.get<Category[]>('/categories');
@@ -134,6 +139,7 @@ export const lookupGlobalStock = (keyword: string, market: string) =>
 export interface Sector {
   id: number;
   name: string;
+  archived?: boolean;
 }
 
 export interface SectorReport {
@@ -146,6 +152,8 @@ export interface SectorReport {
   reportDate?: string;
   category?: string;
   rating: number;
+  archived?: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -154,19 +162,31 @@ export const getSectors = () => API.get<Sector[]>('/research/sectors');
 export const createSector = (payload: { name: string }) => API.post<Sector>('/research/sectors', payload);
 export const updateSector = (id: number, payload: { name: string }) => API.put<Sector>(`/research/sectors/${id}`, payload);
 export const deleteSector = (id: number) => API.delete(`/research/sectors/${id}`);
+export const archiveSector = (id: number) => API.patch<Sector>(`/research/sectors/${id}/archive`);
+export const unarchiveSector = (id: number) => API.patch<Sector>(`/research/sectors/${id}/unarchive`);
 
 export const getSectorReports = (sectorId: number) =>
   API.get<SectorReport[]>(`/research/sectors/${sectorId}/reports`);
+export const getAllSectorReports = () =>
+  API.get<SectorReport[]>('/research/reports');
 export const searchSectorReports = (keyword: string) =>
   API.get<SectorReport[]>('/research/reports/search', { params: { keyword } });
 export const createSectorReport = (sectorId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; category?: string }) =>
   API.post<SectorReport>(`/research/sectors/${sectorId}/reports`, payload);
-export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; category?: string; rating?: number }) =>
+export const updateSectorReport = (sectorId: number, reportId: number, payload: Pick<SectorReport, 'title' | 'content'> & { source?: string; reportDate?: string; category?: string; rating?: number; targetSectorId?: number }) =>
   API.put<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}`, payload);
+export const moveSectorReport = (sectorId: number, reportId: number, targetSectorId: number) =>
+  API.patch<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}/move`, { targetSectorId });
 export const updateSectorReportRating = (sectorId: number, reportId: number, rating: number) =>
   API.patch<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}/rating`, { rating });
 export const deleteSectorReport = (sectorId: number, reportId: number) =>
   API.delete(`/research/sectors/${sectorId}/reports/${reportId}`);
+export const getArchivedSectorReports = () =>
+  API.get<SectorReport[]>('/research/reports/archived');
+export const archiveSectorReport = (sectorId: number, reportId: number) =>
+  API.patch<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}/archive`);
+export const unarchiveSectorReport = (sectorId: number, reportId: number) =>
+  API.patch<SectorReport>(`/research/sectors/${sectorId}/reports/${reportId}/unarchive`);
 
 // ===== Earnings Reports (财报分析) APIs =====
 export interface EarningsReport {
@@ -271,6 +291,7 @@ export const deleteTechCyclePhase = (cycleId: number, phaseId: number) =>
 export interface IdeaCategory {
   id: number;
   name: string;
+  archived?: boolean;
 }
 
 export interface Idea {
@@ -281,6 +302,8 @@ export interface Idea {
   title: string;
   content: string;
   rating: number; // 0-5
+  archived?: boolean;
+  archivedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -289,6 +312,8 @@ export const getIdeaCategories = () => API.get<IdeaCategory[]>('/ideas/categorie
 export const createIdeaCategory = (payload: { name: string }) => API.post<IdeaCategory>('/ideas/categories', payload);
 export const updateIdeaCategory = (id: number, payload: { name: string }) => API.put<IdeaCategory>(`/ideas/categories/${id}`, payload);
 export const deleteIdeaCategory = (id: number) => API.delete(`/ideas/categories/${id}`);
+export const archiveIdeaCategory = (id: number) => API.patch<IdeaCategory>(`/ideas/categories/${id}/archive`);
+export const unarchiveIdeaCategory = (id: number) => API.patch<IdeaCategory>(`/ideas/categories/${id}/unarchive`);
 
 export const getIdeas = (params?: { categoryId?: number }) =>
   API.get<Idea[]>('/ideas', { params });
@@ -301,6 +326,9 @@ export const updateIdea = (id: number, payload: { categoryId?: number | null; su
 export const updateIdeaRating = (id: number, rating: number) =>
   API.patch<Idea>(`/ideas/${id}/rating`, { rating });
 export const deleteIdea = (id: number) => API.delete(`/ideas/${id}`);
+export const getArchivedIdeas = () => API.get<Idea[]>('/ideas/archived');
+export const archiveIdea = (id: number) => API.patch<Idea>(`/ideas/${id}/archive`);
+export const unarchiveIdea = (id: number) => API.patch<Idea>(`/ideas/${id}/unarchive`);
 
 // Idea Attachments
 export interface IdeaAttachment {

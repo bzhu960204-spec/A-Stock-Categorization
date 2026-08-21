@@ -37,6 +37,11 @@ public class SectorReport {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int rating = 0; // 评星 0-5
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean archived = false; // 是否已归档
+
+    private LocalDateTime archivedAt; // 归档时间，恢复时置 null
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

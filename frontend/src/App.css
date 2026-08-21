@@ -357,6 +357,13 @@ body {
   color: var(--text-primary);
   font-weight: 600;
 }
+.category-chip.drag-over {
+  background: color-mix(in srgb, var(--chip-color) 22%, transparent);
+  border-left-color: var(--chip-color);
+  color: var(--text-primary);
+  outline: 1px dashed var(--chip-color);
+  outline-offset: -1px;
+}
 
 .chip-dot {
   width: 7px; height: 7px;
@@ -1103,10 +1110,6 @@ body {
   transform: scale(1.2);
 }
 
-/* Idea module sidebar — always show edit/delete buttons */
-.idea-sidebar .chip-edit-btn {
-  opacity: 1;
-}
 
 /* Star filter in sidebar */
 .star-filter-group {
@@ -1189,6 +1192,39 @@ body {
 }
 .action-btn:hover { background: var(--hover-bg); border-color: var(--accent); color: var(--accent); }
 .action-btn.danger:hover { border-color: var(--danger); background: var(--danger-dim); }
+.action-btn.active { background: var(--hover-bg); border-color: var(--accent); color: var(--accent); }
+
+.row-actions-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 150px;
+  padding: 4px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+.row-menu-item:hover { background: var(--hover-bg); color: var(--accent); }
+.row-menu-item.danger:hover { background: var(--danger-dim); color: var(--danger); }
+.row-menu-icon { font-size: 0.9rem; line-height: 1; }
 
 .stock-count {
   text-align: right;
@@ -4182,6 +4218,9 @@ body {
 }
 .rp-row:hover {
   background: var(--hover-bg);
+}
+.rp-row.dragging {
+  opacity: 0.5;
 }
 .rp-row:hover .rp-row-actions { opacity: 1; }
 .rp-row:hover .rp-row-right .chip-edit-btn { opacity: 1; }

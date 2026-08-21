@@ -20,6 +20,7 @@ import {
   getCategories, createCategory, updateCategory, deleteCategory,
   filterStocks, searchStocks,
   getStockTimeline,
+  getArchivedStocks, archiveStock, unarchiveStock,
   type Stock, type Category, type StockTimelineEntry
 } from './api';
 import './App.css';
@@ -28,9 +29,10 @@ import './App.css';
 // Resizable image component for document read view
 interface AppProps {
   onGoHome?: () => void;
+  forceArchived?: boolean;
 }
 
-function App({ onGoHome }: AppProps = {}) {
+function App({ onGoHome, forceArchived }: AppProps = {}) {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [darkMode, setDarkMode] = useDarkMode();
@@ -42,6 +44,7 @@ function App({ onGoHome }: AppProps = {}) {
   const [filterKey, setFilterKey] = useState(0);
   const [marketFilters, setMarketFilters] = useState<Set<string>>(new Set()); // empty = show all
   const [starFilter, setStarFilter] = useState<number | null>(null); // null = 全部, 1-5 = 至少N星
+  const [showArchived, setShowArchived] = useState(!!forceArchived); // 归档视图
 
   // Category filter popup modal
   const [showCategoryFilterModal, setShowCategoryFilterModal] = useState(false);
@@ -110,6 +113,11 @@ function App({ onGoHome }: AppProps = {}) {
   useEffect(() => {
     const doFilter = async () => {
       try {
+        if (showArchived) {
+          const res = await getArchivedStocks();
+          setStocks(res.data);
+          return;
+        }
         if (searchKeyword.trim()) {
           const res = await searchStocks(searchKeyword);
           let results = res.data;
@@ -135,7 +143,7 @@ function App({ onGoHome }: AppProps = {}) {
     };
     const timer = setTimeout(doFilter, 300);
     return () => clearTimeout(timer);
-  }, [selectedCategoryIds, filterMode, searchKeyword, filterKey]);
+  }, [selectedCategoryIds, filterMode, searchKeyword, filterKey, showArchived]);
 
   const openEditBasicInfo = (stock: Stock) => {
     setEditBasicInfoStock(stock);
@@ -251,6 +259,24 @@ function App({ onGoHome }: AppProps = {}) {
     }
   };
 
+  const handleArchiveStock = async (stock: Stock) => {
+    try {
+      await archiveStock(stock.id);
+      setStocks(prev => prev.filter(s => s.id !== stock.id));
+    } catch (e) {
+      console.error('Failed to archive stock', e);
+    }
+  };
+
+  const handleUnarchiveStock = async (stock: Stock) => {
+    try {
+      await unarchiveStock(stock.id);
+      setStocks(prev => prev.filter(s => s.id !== stock.id));
+    } catch (e) {
+      console.error('Failed to unarchive stock', e);
+    }
+  };
+
   const openTimeline = async (stock: Stock) => {
     setTimelineStock(stock);
     setTimelineEntries([]);
@@ -287,10 +313,17 @@ function App({ onGoHome }: AppProps = {}) {
     });
   };
 
-  const displayedStocks = useMemo(
-    () => filterStocksByMarketAndStar(stocks, marketFilters, starFilter),
-    [stocks, marketFilters, starFilter],
-  );
+  const displayedStocks = useMemo(() => {
+    let result = filterStocksByMarketAndStar(stocks, marketFilters, starFilter);
+    // 归档视图的搜索在已加载的归档股票里做前端过滤（后端搜索只覆盖未归档）
+    if (showArchived && searchKeyword.trim()) {
+      const kw = searchKeyword.trim().toLowerCase();
+      result = result.filter(s =>
+        s.code.toLowerCase().includes(kw) || s.name.toLowerCase().includes(kw),
+      );
+    }
+    return result;
+  }, [stocks, marketFilters, starFilter, showArchived, searchKeyword]);
 
   return (
     <div className="app-container">
@@ -330,9 +363,19 @@ function App({ onGoHome }: AppProps = {}) {
                 <button type="button" className="clear-btn" onClick={() => setSearchKeyword('')}>×</button>
               )}
             </div>
-            <button type="button" className="add-btn" onClick={() => setShowAddStock(true)}>
-              + 添加股票
+            <button
+              type="button"
+              className={`add-btn ${showArchived ? 'archive-active' : 'archive-toggle'}`}
+              onClick={() => setShowArchived(v => !v)}
+              title={showArchived ? '返回正常列表' : '查看归档'}
+            >
+              {showArchived ? '← 返回列表' : '📥 已归档'}
             </button>
+            {!showArchived && (
+              <button type="button" className="add-btn" onClick={() => setShowAddStock(true)}>
+                + 添加股票
+              </button>
+            )}
           </div>
 
           {/* Stock list */}
@@ -355,10 +398,14 @@ function App({ onGoHome }: AppProps = {}) {
               onTimeline={openTimeline}
               onDocument={setDocumentStock}
               onDelete={setPendingDeleteStock}
+              onArchive={handleArchiveStock}
+              onUnarchive={handleUnarchiveStock}
+              archivedView={showArchived}
             />
           </div>
 
           <div className="stock-count">
+            {showArchived && <span className="stock-count-market">归档区 · </span>}
             共 {displayedStocks.length} 只
             {marketFilters.size > 0 && <span className="stock-count-market">（{Array.from(marketFilters).map(m => MARKET_LABEL[m] || m).join('+')}）</span>}
           </div>

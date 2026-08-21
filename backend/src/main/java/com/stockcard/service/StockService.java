@@ -36,7 +36,22 @@ public class StockService {
     private final EarningsReportRepository earningsReportRepository;
 
     public List<Stock> findAll() {
-        return stockRepository.findAll();
+        return stockRepository.findByArchivedFalse();
+    }
+
+    public List<Stock> findArchived() {
+        return stockRepository.findByArchivedTrue();
+    }
+
+    @Transactional
+    public Optional<Stock> setArchived(Long id, boolean archived) {
+        return stockRepository.findById(id).map(stock -> {
+            stock.setArchived(archived);
+            stock.setArchivedAt(archived ? java.time.LocalDateTime.now() : null);
+            Stock saved = stockRepository.save(stock);
+            recordTimeline(saved, "ARCHIVE", archived ? "归档股票" : "取消归档，重新启用");
+            return saved;
+        });
     }
 
     @Transactional
@@ -239,7 +254,7 @@ public class StockService {
 
     public List<Stock> filter(Set<Long> categoryIds, String mode) {
         if (categoryIds.isEmpty()) {
-            return stockRepository.findAll();
+            return stockRepository.findByArchivedFalse();
         }
         if ("intersection".equals(mode)) {
             return stockRepository.findByAllCategoryIds(categoryIds, categoryIds.size());
@@ -250,7 +265,7 @@ public class StockService {
     public List<Stock> search(String keyword) {
         String kw = keyword.trim().toLowerCase();
         if (kw.isEmpty()) {
-            return stockRepository.findAll();
+            return stockRepository.findByArchivedFalse();
         }
         String pattern = "%" + kw + "%";
         Set<Long> ids = new HashSet<>();

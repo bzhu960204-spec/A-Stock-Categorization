@@ -1,4 +1,106 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Stock } from './api';
+
+interface RowActionsProps {
+  stock: Stock;
+  archivedView: boolean;
+  onAssign: (stock: Stock) => void;
+  onTimeline: (stock: Stock) => void;
+  onDocument: (stock: Stock) => void;
+  onDelete: (stock: Stock) => void;
+  onArchive?: (stock: Stock) => void;
+  onUnarchive?: (stock: Stock) => void;
+}
+
+function RowActions({
+  stock, archivedView, onAssign, onTimeline, onDocument, onDelete, onArchive, onUnarchive,
+}: Readonly<RowActionsProps>) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const rect = btnRef.current.getBoundingClientRect();
+    setPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right });
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
+
+  const run = (fn: () => void) => { setOpen(false); fn(); };
+
+  return (
+    <>
+      <button
+        type="button"
+        className="action-btn document"
+        title="研究日志"
+        onClick={() => onDocument(stock)}
+      >📄</button>
+      <button
+        type="button"
+        className="action-btn"
+        title="设置分类"
+        onClick={() => onAssign(stock)}
+      >🏷️</button>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`action-btn${open ? ' active' : ''}`}
+        title="更多操作"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(v => !v)}
+      >⋯</button>
+      {open && createPortal(
+        <div
+          ref={menuRef}
+          className="row-actions-menu"
+          role="menu"
+          style={{ top: pos.top, right: pos.right }}
+        >
+          <button type="button" className="row-menu-item" role="menuitem" onClick={() => run(() => onTimeline(stock))}>
+            <span className="row-menu-icon">⏱️</span>查看时间线
+          </button>
+          {archivedView ? (
+            <button type="button" className="row-menu-item" role="menuitem" onClick={() => run(() => onUnarchive?.(stock))}>
+              <span className="row-menu-icon">♻️</span>恢复（取消归档）
+            </button>
+          ) : (
+            <button type="button" className="row-menu-item" role="menuitem" onClick={() => run(() => onArchive?.(stock))}>
+              <span className="row-menu-icon">📥</span>归档
+            </button>
+          )}
+          <button type="button" className="row-menu-item danger" role="menuitem" onClick={() => run(() => onDelete(stock))}>
+            <span className="row-menu-icon">🗑️</span>删除
+          </button>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
 
 interface StockTableProps {
   stocks: Stock[];
@@ -9,17 +111,21 @@ interface StockTableProps {
   onTimeline: (stock: Stock) => void;
   onDocument: (stock: Stock) => void;
   onDelete: (stock: Stock) => void;
+  onArchive?: (stock: Stock) => void;
+  onUnarchive?: (stock: Stock) => void;
+  archivedView?: boolean;
 }
 
 export function StockTable({
   stocks, onOpenProfile, onEditBasicInfo, onSetResearchValue,
-  onAssign, onTimeline, onDocument, onDelete,
+  onAssign, onTimeline, onDocument, onDelete, onArchive, onUnarchive,
+  archivedView = false,
 }: Readonly<StockTableProps>) {
   if (stocks.length === 0) {
     return (
       <div className="empty-state">
-        <p>暂无股票数据</p>
-        <p className="empty-sub">点击"添加股票"开始</p>
+        <p>{archivedView ? '归档区暂无股票' : '暂无股票数据'}</p>
+        {!archivedView && <p className="empty-sub">点击"添加股票"开始</p>}
       </div>
     );
   }
@@ -77,30 +183,16 @@ export function StockTable({
               </div>
             </td>
             <td className="stock-actions" onClick={e => e.stopPropagation()}>
-              <button
-                type="button"
-                className="action-btn"
-                title="设置分类"
-                onClick={() => onAssign(stock)}
-              >🏷️</button>
-              <button
-                type="button"
-                className="action-btn timeline"
-                title="查看时间线"
-                onClick={() => onTimeline(stock)}
-              >⏱️</button>
-              <button
-                type="button"
-                className="action-btn document"
-                title="研究日志"
-                onClick={() => onDocument(stock)}
-              >📄</button>
-              <button
-                type="button"
-                className="action-btn danger"
-                title="删除"
-                onClick={() => onDelete(stock)}
-              >🗑️</button>
+              <RowActions
+                stock={stock}
+                archivedView={archivedView}
+                onAssign={onAssign}
+                onTimeline={onTimeline}
+                onDocument={onDocument}
+                onDelete={onDelete}
+                onArchive={onArchive}
+                onUnarchive={onUnarchive}
+              />
             </td>
           </tr>
         ))}

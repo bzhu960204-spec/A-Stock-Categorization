@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -63,6 +64,37 @@ public class IdeaService {
         return CategoryDeleteResult.DELETED;
     }
 
+    /** 归档整个文件夹：把该文件夹下所有未归档文章一并归档，并把文件夹标记为归档。 */
+    @Transactional
+    public Optional<IdeaCategory> archiveCategory(Long id) {
+        return categoryRepository.findById(id).map(cat -> {
+            LocalDateTime now = LocalDateTime.now();
+            List<Idea> active = ideaRepository.findByCategoryIdAndArchivedFalseOrderByCreatedAtDesc(id);
+            active.forEach(idea -> {
+                idea.setArchived(true);
+                idea.setArchivedAt(now);
+            });
+            ideaRepository.saveAll(active);
+            cat.setArchived(true);
+            return categoryRepository.save(cat);
+        });
+    }
+
+    /** 恢复整个文件夹：把该文件夹下所有已归档文章一并恢复，并把文件夹标记为活跃。 */
+    @Transactional
+    public Optional<IdeaCategory> unarchiveCategory(Long id) {
+        return categoryRepository.findById(id).map(cat -> {
+            List<Idea> archived = ideaRepository.findByCategoryIdAndArchivedTrueOrderByCreatedAtDesc(id);
+            archived.forEach(idea -> {
+                idea.setArchived(false);
+                idea.setArchivedAt(null);
+            });
+            ideaRepository.saveAll(archived);
+            cat.setArchived(false);
+            return categoryRepository.save(cat);
+        });
+    }
+
     // ── Ideas ─────────────────────────────────────────────────────────────────
 
     public boolean ideaExists(Long id) {
@@ -71,9 +103,27 @@ public class IdeaService {
 
     public List<Idea> getAll(Long categoryId) {
         if (categoryId != null) {
-            return ideaRepository.findByCategoryIdOrderByCreatedAtDesc(categoryId);
+            return ideaRepository.findByCategoryIdAndArchivedFalseOrderByCreatedAtDesc(categoryId);
         }
-        return ideaRepository.findAllByOrderByCreatedAtDesc();
+        return ideaRepository.findByArchivedFalseOrderByCreatedAtDesc();
+    }
+
+    public List<Idea> getArchived() {
+        return ideaRepository.findByArchivedTrueOrderByCreatedAtDesc();
+    }
+
+    @Transactional
+    public Optional<Idea> setArchived(Long id, boolean archived) {
+        return ideaRepository.findById(id).map(idea -> {
+            idea.setArchived(archived);
+            idea.setArchivedAt(archived ? LocalDateTime.now() : null);
+            // 恢复单篇时，若其文件夹处于归档态，则一并恢复文件夹（否则该文章无处显示）
+            if (!archived && idea.getCategory() != null && idea.getCategory().isArchived()) {
+                idea.getCategory().setArchived(false);
+                categoryRepository.save(idea.getCategory());
+            }
+            return ideaRepository.save(idea);
+        });
     }
 
     public List<Idea> search(String pattern) {

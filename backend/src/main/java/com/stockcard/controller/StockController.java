@@ -44,6 +44,27 @@ public class StockController {
                 : ResponseEntity.notFound().build();
     }
 
+    // ── Archive ───────────────────────────────────────────────────────────────
+
+    @GetMapping("/archived")
+    public List<Stock> getArchivedStocks() {
+        return stockService.findArchived();
+    }
+
+    @PatchMapping("/{id}/archive")
+    public ResponseEntity<Stock> archiveStock(@PathVariable Long id) {
+        return stockService.setArchived(id, true)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}/unarchive")
+    public ResponseEntity<Stock> unarchiveStock(@PathVariable Long id) {
+        return stockService.setArchived(id, false)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     @GetMapping("/{id}/documents")
     public ResponseEntity<List<StockDocument>> getStockDocuments(@PathVariable Long id) {
         return stockService.listDocuments(id)

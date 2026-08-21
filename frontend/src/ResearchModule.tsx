@@ -1,31 +1,39 @@
 ﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useDarkMode } from './useDarkMode';
-import { DocEditor, type DocEditorHandle } from './DocEditor';
+import { type DocEditorHandle } from './DocEditor';
+import CategorySidebar from './CategorySidebar';
+import DocRow from './DocRow';
+import DocFilterBar from './DocFilterBar';
+import DocCategoryPills from './DocCategoryPills';
+import DocListToolbar from './DocListToolbar';
+import DocEditModal from './DocEditModal';
+import DocReadModal from './DocReadModal';
+import { printDocument } from './printExport';
 import {
   getSectors, createSector, updateSector, deleteSector,
-  getSectorReports, createSectorReport, updateSectorReport, deleteSectorReport,
-  updateSectorReportRating, searchSectorReports,
+  archiveSector, unarchiveSector,
+  getSectorReports, getAllSectorReports, createSectorReport, updateSectorReport, deleteSectorReport,
+  updateSectorReportRating, moveSectorReport,
+  getArchivedSectorReports, archiveSectorReport, unarchiveSectorReport,
   type Sector, type SectorReport,
 } from './api';
 import './App.css';
 
 interface ResearchModuleProps {
   onGoHome: () => void;
+  forceArchived?: boolean;
 }
 
-export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
+export default function ResearchModule({ onGoHome, forceArchived }: ResearchModuleProps) {
   const [darkMode, setDarkMode] = useDarkMode();
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
   const [reports, setReports] = useState<SectorReport[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
 
-  // Sector editing
-  const [showAddSector, setShowAddSector] = useState(false);
-  const [newSectorName, setNewSectorName] = useState('');
-  const [editingSector, setEditingSector] = useState<Sector | null>(null);
-  const [editSectorName, setEditSectorName] = useState('');
-  const [sectorSearchQuery, setSectorSearchQuery] = useState('');
+  // Archive view
+  const [archivedReports, setArchivedReports] = useState<SectorReport[]>([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -36,17 +44,16 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
   const [search, setSearch] = useState('');
   const [starFilter, setStarFilter] = useState(0); // 0 = all, 1-5 = at least N stars
 
-  // Search scope: 'local' = within selected sector, 'global' = all sectors
-  const [searchScope, setSearchScope] = useState<'local' | 'global'>('global');
-  const [globalResults, setGlobalResults] = useState<SectorReport[]>([]);
-  const [globalSearching, setGlobalSearching] = useState(false);
-
   // Edit form state (inside modal)
   const [editTitle, setEditTitle] = useState('');
   const [editSource, setEditSource] = useState('');
   const [editReportDate, setEditReportDate] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [editContent, setEditContent] = useState('');
+  const [editSectorId, setEditSectorId] = useState<number | null>(null);
+
+  // Drag & drop: move a report onto a sector chip
+  const [dragReportId, setDragReportId] = useState<number | null>(null);
 
   // Category filter for local reports
   const [categoryFilter, setCategoryFilter] = useState('全部');
@@ -79,36 +86,63 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     }
   }, []);
 
+  const loadAllReports = useCallback(async () => {
+    setLoadingReports(true);
+    try {
+      const res = await getAllSectorReports();
+      setReports(res.data);
+    } finally {
+      setLoadingReports(false);
+    }
+  }, []);
+
   useEffect(() => {
-    if (selectedSector) {
-      loadReports(selectedSector.id);
-      setSearchScope('local');
-    } else {
-      setReports([]);
-      setSearchScope('global');
+    if (!forceArchived) {
+      if (selectedSector) {
+        loadReports(selectedSector.id);
+      } else {
+        loadAllReports();
+      }
     }
     setSearch('');
     setStarFilter(0);
     setCategoryFilter('全部');
-    setGlobalResults([]);
-  }, [selectedSector, loadReports]);
+  }, [selectedSector, loadReports, loadAllReports]);
 
-  // Debounced global search (runs when scope is 'global')
-  useEffect(() => {
-    if (searchScope !== 'global') { setGlobalResults([]); return; }
-    const kw = search.trim();
-    if (!kw) { setGlobalResults([]); return; }
-    const timer = setTimeout(async () => {
-      setGlobalSearching(true);
-      try {
-        const res = await searchSectorReports(kw);
-        setGlobalResults(res.data);
-      } finally {
-        setGlobalSearching(false);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [search, searchScope]);
+  const loadArchived = useCallback(async () => {
+    setLoadingArchived(true);
+    try {
+      const res = await getArchivedSectorReports();
+      setArchivedReports(res.data);
+    } finally {
+      setLoadingArchived(false);
+    }
+  }, []);
+
+  useEffect(() => { if (forceArchived) loadArchived(); }, [forceArchived, loadArchived]);
+
+  const handleArchiveReport = async (report: SectorReport, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    await archiveSectorReport(report.sectorId, report.id);
+    setReports(prev => prev.filter(r => r.id !== report.id));
+    if (modalReport?.id === report.id) closeModal();
+  };
+
+  const handleUnarchiveReport = async (report: SectorReport, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    await unarchiveSectorReport(report.sectorId, report.id);
+    setArchivedReports(prev => prev.filter(r => r.id !== report.id));
+    if (modalReport?.id === report.id) closeModal();
+    await loadSectors(); // 恢复单篇可能令其行业重新变为活跃
+    if (selectedSector?.id === report.sectorId) await loadReports(selectedSector.id);
+  };
+
+  const handleDeleteArchivedReport = async (report: SectorReport, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!window.confirm(`彻底删除研报「${report.title}」？此操作不可恢复。`)) return;
+    await deleteSectorReport(report.sectorId, report.id);
+    setArchivedReports(prev => prev.filter(r => r.id !== report.id));
+  };
 
   const reportCategories = useMemo(() =>
     ['全部', ...Array.from(new Set(reports.map(r => r.category).filter((c): c is string => !!c)))],
@@ -130,18 +164,15 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     return list;
   }, [reports, search, starFilter, categoryFilter]);
 
-  const handleAddSector = async () => {
-    if (!newSectorName.trim()) return;
-    await createSector({ name: newSectorName.trim() });
-    setNewSectorName('');
-    setShowAddSector(false);
+  const handleAddSector = async (name: string) => {
+    if (!name.trim()) return;
+    await createSector({ name: name.trim() });
     await loadSectors();
   };
 
-  const handleUpdateSector = async () => {
-    if (!editingSector || !editSectorName.trim()) return;
-    await updateSector(editingSector.id, { name: editSectorName.trim() });
-    setEditingSector(null);
+  const handleUpdateSector = async (id: number, name: string) => {
+    if (!name.trim()) return;
+    await updateSector(id, { name: name.trim() });
     await loadSectors();
   };
 
@@ -159,6 +190,20 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
         alert('删除失败，请重试。');
       }
     }
+  };
+
+  const handleArchiveSector = async (sector: Sector) => {
+    if (!window.confirm(`归档整个行业「${sector.name}」？该行业及其下所有研报都会被归档隐藏。`)) return;
+    await archiveSector(sector.id);
+    if (selectedSector?.id === sector.id) setSelectedSector(null);
+    await loadSectors();
+  };
+
+  const handleUnarchiveSector = async (sector: Sector) => {
+    await unarchiveSector(sector.id);
+    if (selectedSector?.id === sector.id) setSelectedSector(null);
+    await loadSectors();
+    await loadArchived();
   };
 
   const closeModal = () => {
@@ -192,14 +237,15 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     setEditReportDate(report.reportDate || '');
     setEditCategory(report.category || '');
     setEditContent(report.content || '');
+    setEditSectorId(report.sectorId);
     editContentRef.current = report.content || '';
     setSaveError('');
     setModalMode('edit');
   };
 
   const handleSaveReport = async () => {
-    if (!selectedSector) return;
     if (!editTitle.trim()) { setSaveError('请填写报告标题'); return; }
+    if (!modalReport && !selectedSector) return;
     setSavingReport(true);
     setSaveError('');
     try {
@@ -212,13 +258,18 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
       };
       let saved: SectorReport;
       if (!modalReport) {
-        const res = await createSectorReport(selectedSector.id, payload);
+        const res = await createSectorReport(selectedSector!.id, payload);
         saved = res.data;
       } else {
-        const res = await updateSectorReport(selectedSector.id, modalReport.id, payload);
+        const moved = editSectorId != null && editSectorId !== modalReport.sectorId;
+        const res = await updateSectorReport(modalReport.sectorId, modalReport.id, {
+          ...payload,
+          targetSectorId: moved ? editSectorId : undefined,
+        });
         saved = res.data;
       }
-      await loadReports(selectedSector.id);
+      if (selectedSector) await loadReports(selectedSector.id);
+      else await loadAllReports();
       setModalReport(saved);
       setModalMode('read');
     } catch {
@@ -228,21 +279,34 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     }
   };
 
+  const handleDropOnSector = async (targetSector: Sector) => {
+    const reportId = dragReportId;
+    setDragReportId(null);
+    if (reportId == null || targetSector.archived) return;
+    const report = reports.find(r => r.id === reportId);
+    if (!report || report.sectorId === targetSector.id) return;
+    try {
+      await moveSectorReport(report.sectorId, reportId, targetSector.id);
+      if (selectedSector) await loadReports(selectedSector.id);
+      else await loadAllReports();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleDeleteReport = async (report: SectorReport, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!selectedSector) return;
     if (!window.confirm(`确定删除研报「${report.title}」？`)) return;
-    await deleteSectorReport(selectedSector.id, report.id);
-    await loadReports(selectedSector.id);
+    await deleteSectorReport(report.sectorId, report.id);
+    setReports(prev => prev.filter(r => r.id !== report.id));
     if (modalReport?.id === report.id) closeModal();
   };
 
-  const handleRating = async (report: SectorReport, n: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!selectedSector) return;
+  const handleRating = async (report: SectorReport, n: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const newRating = (report.rating ?? 0) === n ? 0 : n;
     try {
-      const res = await updateSectorReportRating(selectedSector.id, report.id, newRating);
+      const res = await updateSectorReportRating(report.sectorId, report.id, newRating);
       setReports(prev => prev.map(r => r.id === report.id ? res.data : r));
       if (modalReport?.id === report.id) setModalReport(res.data);
     } catch (err) { console.error(err); }
@@ -252,57 +316,25 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
     html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140);
 
   const handleExportPdf = (report: SectorReport) => {
-    const stars = '★'.repeat(report.rating ?? 0) + '☆'.repeat(5 - (report.rating ?? 0));
-    const metaParts = [
-      report.sectorName ? `行业：${report.sectorName}` : (selectedSector ? `行业：${selectedSector.name}` : ''),
-      report.source ? `来源：${report.source}` : '',
-      report.reportDate ? `报告日期：${report.reportDate}` : '',
-      report.createdAt ? `录入日期：${new Date(report.createdAt).toLocaleDateString('zh-CN')}` : '',
-    ].filter(Boolean).join('　|　');
-
-    const html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <title>${report.title}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "PingFang SC", "Microsoft YaHei", "SimSun", sans-serif; font-size: 14px; color: #1a1a1a; background: #fff; padding: 40px 48px; }
-    .report-title { font-size: 22px; font-weight: 700; line-height: 1.4; margin-bottom: 10px; }
-    .report-stars { font-size: 18px; color: #f5a623; letter-spacing: 2px; margin-bottom: 6px; }
-    .report-meta { font-size: 12px; color: #666; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 24px; }
-    .report-content { line-height: 1.8; }
-    .report-content p { margin-bottom: 0.8em; }
-    .report-content h1, .report-content h2, .report-content h3 { margin: 1em 0 0.5em; font-weight: 600; }
-    .report-content ul, .report-content ol { margin: 0.5em 0 0.8em 1.5em; }
-    .report-content li { margin-bottom: 0.3em; }
-    .report-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-    .report-content th, .report-content td { border: 1px solid #ccc; padding: 6px 10px; font-size: 13px; }
-    .report-content th { background: #f5f5f5; font-weight: 600; }
-    .report-content blockquote { border-left: 3px solid #ccc; padding-left: 12px; color: #555; margin: 0.8em 0; }
-    .report-content strong { font-weight: 700; }
-    .report-content em { font-style: italic; }
-    @media print {
-      body { padding: 20px 28px; }
-      @page { size: A4; margin: 20mm 18mm; }
-    }
-  </style>
-</head>
-<body>
-  <div class="report-title">${report.title}</div>
-  <div class="report-stars">${stars}</div>
-  <div class="report-meta">${metaParts}</div>
-  <div class="report-content">${report.content || '<p>（无内容）</p>'}</div>
-  <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };<\/script>
-</body>
-</html>`;
-
-    const win = window.open('', '_blank', 'width=900,height=700');
-    if (win) {
-      win.document.write(html);
-      win.document.close();
-    }
+    printDocument({
+      title: report.title,
+      stars: '★'.repeat(report.rating ?? 0) + '☆'.repeat(5 - (report.rating ?? 0)),
+      metaParts: [
+        report.sectorName ? `行业：${report.sectorName}` : '',
+        report.source ? `来源：${report.source}` : '',
+        report.reportDate ? `报告日期：${report.reportDate}` : '',
+        report.createdAt ? `录入日期：${new Date(report.createdAt).toLocaleDateString('zh-CN')}` : '',
+      ],
+      contentHtml: report.content,
+    });
   };
+
+  // In forced-archive mode: only sectors that actually have archived reports, and filter list by selection.
+  const archivedSectorIds = useMemo(() => new Set(archivedReports.map(r => r.sectorId)), [archivedReports]);
+  const shownArchivedReports = useMemo(
+    () => (forceArchived && selectedSector ? archivedReports.filter(r => r.sectorId === selectedSector.id) : archivedReports),
+    [forceArchived, selectedSector, archivedReports],
+  );
 
   return (
     <div className="app-container">
@@ -320,382 +352,234 @@ export default function ResearchModule({ onGoHome }: ResearchModuleProps) {
 
       <main className="main-layout">
         {/* Sidebar: sectors */}
-        <aside className="glass-sidebar">
-          <div className="sidebar-section">
-            <div className="section-header">
-              <h3>行业</h3>
-              <button className="small-btn" title="新增行业" onClick={() => setShowAddSector(true)}>+</button>
-            </div>
-
-            {showAddSector && (
-              <div className="inline-add-row">
-                <input
-                  className="inline-input"
-                  placeholder="行业名称"
-                  value={newSectorName}
-                  onChange={e => setNewSectorName(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') handleAddSector();
-                    if (e.key === 'Escape') { setShowAddSector(false); setNewSectorName(''); }
-                  }}
-                  autoFocus
-                />
-                <button className="small-btn" onClick={handleAddSector}>✓</button>
-                <button className="small-btn" onClick={() => { setShowAddSector(false); setNewSectorName(''); }}>✕</button>
-              </div>
-            )}
-
-            <div style={{ position: 'relative', marginBottom: '6px' }}>
-              <input
-                className="cat-filter-search-input"
-                placeholder="过滤行业…"
-                value={sectorSearchQuery}
-                onChange={e => setSectorSearchQuery(e.target.value)}
-              />
-              {sectorSearchQuery && (
-                <button className="cat-filter-search-clear" onClick={() => setSectorSearchQuery('')}>✕</button>
-              )}
-            </div>
-
-            <div className="category-list">
-              {sectors.filter(s => s.name.toLowerCase().includes(sectorSearchQuery.toLowerCase())).map(sector => (
-                <div key={sector.id} className="category-chip-row">
-                  {editingSector?.id === sector.id ? (
-                    <div className="inline-add-row" style={{ flex: 1 }}>
-                      <input
-                        className="inline-input"
-                        value={editSectorName}
-                        onChange={e => setEditSectorName(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') handleUpdateSector();
-                          if (e.key === 'Escape') setEditingSector(null);
-                        }}
-                        autoFocus
-                      />
-                      <button className="small-btn" onClick={handleUpdateSector}>✓</button>
-                      <button className="small-btn" onClick={() => setEditingSector(null)}>✕</button>
-                    </div>
-                  ) : (
-                    <>
-                      <button
-                        className={`category-chip ${selectedSector?.id === sector.id ? 'selected' : ''}`}
-                        style={{ '--chip-color': 'var(--accent)' } as React.CSSProperties}
-                        onClick={() => setSelectedSector(sector)}
-                      >
-                        <span className="chip-name">{sector.name}</span>
-                      </button>
-                      <button className="chip-edit-btn" title="编辑"
-                        onClick={() => { setEditingSector(sector); setEditSectorName(sector.name); }}>✎</button>
-                      <button className="chip-edit-btn" title="删除" style={{ color: 'var(--danger)' }}
-                        onClick={() => handleDeleteSector(sector)}>✕</button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {sectors.length === 0 && !showAddSector && (
-              <p className="empty-hint">点击 + 新增行业</p>
-            )}
-          </div>
-        </aside>
+        <CategorySidebar
+          title="行业"
+          categories={sectors.filter(s => forceArchived ? (s.archived || archivedSectorIds.has(s.id)) : !s.archived)}
+          filter={forceArchived ? (selectedSector?.id ?? -1) : (selectedSector?.id ?? null)}
+          onSelect={(id) => {
+            if (id === null) { setSelectedSector(null); return; }
+            const sector = sectors.find(s => s.id === id) ?? null;
+            if (forceArchived) {
+              setSelectedSector(prev => prev?.id === id ? null : sector);
+            } else {
+              setSelectedSector(sector);
+            }
+          }}
+          onAdd={handleAddSector}
+          onUpdate={handleUpdateSector}
+          onDelete={handleDeleteSector}
+          onArchiveFolder={!forceArchived ? handleArchiveSector : undefined}
+          onRestoreFolder={forceArchived ? handleUnarchiveSector : undefined}
+          onDropItem={!forceArchived ? handleDropOnSector : undefined}
+          showAll={!forceArchived}
+          fullWidthAll
+          canAdd={!forceArchived}
+          canEdit={!forceArchived}
+          searchable
+          searchPlaceholder="过滤行业…"
+        />
 
         {/* Main content */}
         <div className="main-content">
           <div className="rp-list-wrap">
 
+            {forceArchived ? (
+              <>
+                <DocListToolbar
+                  title={selectedSector ? `📥 ${selectedSector.name} · 已归档` : '📥 已归档研报'}
+                  count={loadingArchived ? '…' : `${shownArchivedReports.length} 篇`}
+                />
+                {loadingArchived ? (
+                  <div className="research-empty-state">加载中…</div>
+                ) : shownArchivedReports.length === 0 ? (
+                  <div className="research-empty-state">归档区暂无研报</div>
+                ) : (
+                  <div className="rp-list">
+                    {shownArchivedReports.map(report => (
+                      <DocRow
+                        key={report.id}
+                        onClick={() => openReadModal(report)}
+                        tags={<span className="rp-global-sector-tag">{report.sectorName}</span>}
+                        title={report.title}
+                        preview={report.content ? stripHtml(report.content) : '（无内容）'}
+                        rating={report.rating ?? 0}
+                        date={new Date(report.createdAt).toLocaleDateString('zh-CN')}
+                        actions={
+                          <div className="rp-row-actions" onClick={e => e.stopPropagation()}>
+                            <button className="chip-edit-btn" title="恢复（取消归档）"
+                              onClick={e => handleUnarchiveReport(report, e)}>♻️</button>
+                            <button className="chip-edit-btn" title="彻底删除" style={{ color: 'var(--danger)' }}
+                              onClick={e => handleDeleteArchivedReport(report, e)}>✕</button>
+                          </div>
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+            <>
             {/* Toolbar */}
-            <div className="rp-toolbar">
-              <span className="rp-toolbar-title">
-                {searchScope === 'global' ? '全局搜索' : (selectedSector?.name ?? '全局搜索')}
-              </span>
-              {(searchScope === 'local' || search.trim()) && (
-                <span className="rp-toolbar-count">
-                  {searchScope === 'global'
-                    ? (globalSearching ? '…' : `${globalResults.length} 篇`)
-                    : `${filteredReports.length}/${reports.length} 篇`}
-                </span>
-              )}
-              <div style={{ flex: 1 }} />
-              {searchScope === 'local' && selectedSector && (
+            <DocListToolbar
+              title={selectedSector?.name ?? '全部研报'}
+              count={`${filteredReports.length}/${reports.length} 篇`}
+            >
+              {selectedSector && (
                 <button className="rp-new-btn" onClick={openNewModal}>+ 新增研报</button>
               )}
-            </div>
+            </DocListToolbar>
 
             {/* Unified filter bar */}
-            <div className="rp-filter-bar">
-              <div className="rp-search-wrap">
-                <input
-                  className="rp-search-input"
-                  placeholder={searchScope === 'global'
-                    ? '全局搜索研报标题 / 内容 / 来源…'
-                    : '搜索标题 / 来源 / 日期…'}
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                />
-                {selectedSector && (
-                  <button
-                    className={`rp-scope-toggle${searchScope === 'global' ? ' active' : ''}`}
-                    onClick={() => {
-                      setSearchScope(prev => prev === 'local' ? 'global' : 'local');
-                      setSearch('');
-                      setGlobalResults([]);
-                    }}
-                    title={searchScope === 'local' ? '切换为全局搜索' : '切换为本行业搜索'}
-                  >
-                    {searchScope === 'local' ? '本行业' : '全局'}
-                  </button>
-                )}
-              </div>
-              {searchScope === 'local' && selectedSector && (
-                <div className="rp-star-filters">
-                  {[0, 1, 2, 3, 4, 5].map(n => (
-                    <button
-                      key={n}
-                      className={`rp-star-filter-btn${starFilter === n ? ' active' : ''}`}
-                      onClick={() => setStarFilter(n)}
-                      title={n === 0 ? '全部' : `${n}星及以上`}
-                    >
-                      {n === 0 ? '全部' : `${'★'.repeat(n)}`}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <DocFilterBar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder={selectedSector ? '搜索本行业标题 / 来源 / 日期…' : '搜索全部研报标题 / 来源 / 日期…'}
+              starFilter={starFilter}
+              onStarFilterChange={setStarFilter}
+              showClear={false}
+            />
 
-            {/* Category pills — local mode only */}
-            {searchScope === 'local' && selectedSector && reportCategories.length > 1 && (
-              <div className="doc-category-pills">
-                {reportCategories.map(cat => (
-                  <button
-                    key={cat}
-                    className={`doc-category-pill${categoryFilter === cat ? ' active' : ''}`}
-                    onClick={() => setCategoryFilter(cat)}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
+            {/* Category pills */}
+            {reportCategories.length > 1 && (
+              <DocCategoryPills
+                options={reportCategories}
+                value={categoryFilter}
+                onChange={setCategoryFilter}
+              />
             )}
 
             {/* Results */}
-            {searchScope === 'global' ? (
-              !search.trim() ? (
-                !selectedSector ? (
-                  <div className="research-empty-state">
-                    <span>← 从左侧选择一个行业，或在搜索框中全局搜索</span>
-                  </div>
-                ) : (
-                  <div className="research-empty-state">
-                    <span>输入关键词以全局搜索研报</span>
-                  </div>
-                )
-              ) : globalSearching ? (
-                <div className="research-empty-state">搜索中…</div>
-              ) : globalResults.length === 0 ? (
-                <div className="research-empty-state">无匹配研报</div>
-              ) : (
-                <div className="rp-list">
-                  {globalResults.map(report => (
-                    <div key={report.id} className="rp-row" onClick={() => {
-                      const sec = sectors.find(s => s.id === report.sectorId);
-                      if (sec) setSelectedSector(sec);
-                      openReadModal(report);
-                    }}>
-                      <div className="rp-row-main">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className="rp-global-sector-tag">{report.sectorName}</span>
-                          <span className="rp-row-title">{report.title}</span>
-                        </div>
-                        <span className="rp-row-preview">
-                          {report.content ? stripHtml(report.content) : '（无内容）'}
-                        </span>
-                      </div>
-                      <div className="rp-row-right">
-                        <div className="rp-row-stars">
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <span key={n} className={`star-btn${(report.rating ?? 0) >= n ? ' filled' : ''}`}>
-                              {(report.rating ?? 0) >= n ? '★' : '☆'}
-                            </span>
-                          ))}
-                        </div>
-                        <span className="rp-row-date">
-                          {new Date(report.createdAt).toLocaleDateString('zh-CN')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
+            {loadingReports ? (
+              <div className="research-empty-state">加载中…</div>
+            ) : reports.length === 0 ? (
+              <div className="research-empty-state" style={{ flexDirection: 'column', gap: 14 }}>
+                <span style={{ fontSize: '2rem' }}>📋</span>
+                <span>{selectedSector ? '暂无研报，点击「新增研报」开始记录' : '暂无研报'}</span>
+              </div>
+            ) : filteredReports.length === 0 ? (
+              <div className="research-empty-state">无匹配结果</div>
             ) : (
-              !selectedSector ? (
-                <div className="research-empty-state">
-                  <span>← 从左侧选择一个行业</span>
-                </div>
-              ) : loadingReports ? (
-                <div className="research-empty-state">加载中…</div>
-              ) : reports.length === 0 ? (
-                <div className="research-empty-state" style={{ flexDirection: 'column', gap: 14 }}>
-                  <span style={{ fontSize: '2rem' }}>📋</span>
-                  <span>暂无研报，点击「新增研报」开始记录</span>
-                </div>
-              ) : filteredReports.length === 0 ? (
-                <div className="research-empty-state">无匹配结果</div>
-              ) : (
                 <div className="rp-list">
                   {filteredReports.map(report => (
-                    <div key={report.id} className="rp-row" onClick={() => openReadModal(report)}>
-                      <div className="rp-row-main">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                          {report.category && <span className="rp-global-sector-tag">{report.category}</span>}
-                          <span className="rp-row-title">{report.title}</span>
-                        </div>
-                        <span className="rp-row-preview">
-                          {report.content ? stripHtml(report.content) : '（无内容）'}
-                        </span>
-                      </div>
-                      <div className="rp-row-right">
-                        <div className="rp-row-stars" onClick={e => e.stopPropagation()}>
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <span
-                              key={n}
-                              className={`star-btn${(report.rating ?? 0) >= n ? ' filled' : ''}`}
-                              onClick={e => handleRating(report, n, e)}
-                              title={`设为 ${n} 星`}
-                            >
-                              {(report.rating ?? 0) >= n ? '★' : '☆'}
-                            </span>
-                          ))}
-                        </div>
-                        <span className="rp-row-date">
-                          {new Date(report.createdAt).toLocaleDateString('zh-CN')}
-                        </span>
+                    <DocRow
+                      key={report.id}
+                      draggable
+                      dragging={dragReportId === report.id}
+                      onDragStart={e => { setDragReportId(report.id); e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragEnd={() => setDragReportId(null)}
+                      onClick={() => openReadModal(report)}
+                      tags={!selectedSector
+                        ? <span className="rp-global-sector-tag">{report.sectorName}</span>
+                        : (report.category ? <span className="rp-global-sector-tag">{report.category}</span> : undefined)}
+                      title={report.title}
+                      preview={report.content ? stripHtml(report.content) : '（无内容）'}
+                      rating={report.rating ?? 0}
+                      onRate={n => handleRating(report, n)}
+                      date={new Date(report.createdAt).toLocaleDateString('zh-CN')}
+                      actions={
                         <div className="rp-row-actions" onClick={e => e.stopPropagation()}>
                           <button className="chip-edit-btn" title="编辑"
                             onClick={() => { setModalReport(report); switchToEdit(report); setModalOpen(true); }}>✎</button>
+                          <button className="chip-edit-btn" title="归档"
+                            onClick={e => handleArchiveReport(report, e)}>📥</button>
                           <button className="chip-edit-btn" title="删除" style={{ color: 'var(--danger)' }}
                             onClick={e => handleDeleteReport(report, e)}>✕</button>
                         </div>
-                      </div>
-                    </div>
+                      }
+                    />
                   ))}
                 </div>
-              )
+              )}
+            </>
             )}
 
           </div>
         </div>
       </main>
 
-      {/* Full-screen modal */}
-      {modalOpen && (
-        <div className="rp-modal-overlay" onClick={() => { if (modalMode !== 'edit') closeModal(); }}>
-          <div className="rp-modal" onClick={e => e.stopPropagation()}>
+      {/* Read view — shared component (also used by the archive center) */}
+      {modalOpen && modalMode === 'read' && modalReport && (
+        <DocReadModal
+          title={modalReport.title}
+          rating={modalReport.rating}
+          onRate={n => handleRating(modalReport, n)}
+          metaTags={<>
+            {modalReport.sectorName && <span className="research-meta-tag">{modalReport.sectorName}</span>}
+            {modalReport.source && <span className="research-meta-tag">{modalReport.source}</span>}
+            {modalReport.reportDate && <span className="research-meta-tag">{modalReport.reportDate}</span>}
+            {modalReport.category && <span className="research-meta-tag">{modalReport.category}</span>}
+            {modalReport.createdAt && (
+              <span className="research-meta-date">{new Date(modalReport.createdAt).toLocaleDateString('zh-CN')}</span>
+            )}
+          </>}
+          content={modalReport.content}
+          onExportPdf={() => handleExportPdf(modalReport)}
+          onEdit={() => switchToEdit(modalReport)}
+          onClose={closeModal}
+          headerExtra={
+            modalReport.archived ? (
+              <button className="icon-btn" onClick={() => handleUnarchiveReport(modalReport)} title="恢复">♻️ 恢复</button>
+            ) : (
+              <button className="icon-btn" onClick={() => handleArchiveReport(modalReport)} title="归档">📥 归档</button>
+            )
+          }
+        />
+      )}
 
-            <div className="rp-modal-header">
-              {modalMode === 'read' ? (
-                <>
-                  <div className="rp-modal-header-left">
-                    <span className="rp-modal-title-display">{modalReport?.title}</span>
-                    <div className="rp-modal-meta">
-                      <div className="star-rating-inline" onClick={e => e.stopPropagation()}>
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <span
-                            key={n}
-                            className={`star-btn${(modalReport?.rating ?? 0) >= n ? ' filled' : ''}`}
-                            onClick={e => modalReport && handleRating(modalReport, n, e)}
-                            title={`设为 ${n} 星`}
-                          >
-                            {(modalReport?.rating ?? 0) >= n ? '★' : '☆'}
-                          </span>
-                        ))}
-                      </div>
-                      {modalReport?.source && <span className="research-meta-tag">{modalReport.source}</span>}
-                      {modalReport?.reportDate && <span className="research-meta-tag">{modalReport.reportDate}</span>}
-                      {modalReport?.category && <span className="research-meta-tag">{modalReport.category}</span>}
-                      {modalReport?.createdAt && (
-                        <span className="research-meta-date">
-                          {new Date(modalReport.createdAt).toLocaleDateString('zh-CN')}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="rp-modal-header-right">
-                    <button className="icon-btn" onClick={() => modalReport && handleExportPdf(modalReport)} title="导出为 PDF">⬇ 导出PDF</button>
-                    <button className="icon-btn" onClick={() => switchToEdit(modalReport!)}>✎ 编辑</button>
-                    <button className="icon-btn" onClick={closeModal}>✕ 关闭</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="rp-modal-header-left rp-modal-edit-meta">
-                    <input
-                      className="rp-modal-title-input"
-                      placeholder="报告标题 *"
-                      value={editTitle}
-                      onChange={e => { setEditTitle(e.target.value); if (saveError) setSaveError(''); }}
-                      autoFocus
-                    />
-                    <div className="rp-modal-meta-inputs">
-                      <input
-                        className="rp-modal-meta-input"
-                        placeholder="来源（如：中信证券）"
-                        value={editSource}
-                        onChange={e => setEditSource(e.target.value)}
-                      />
-                      <input
-                        className="rp-modal-meta-input"
-                        placeholder="报告日期（如：2026-04-01）"
-                        value={editReportDate}
-                        onChange={e => setEditReportDate(e.target.value)}
-                      />
-                      <input
-                        className="rp-modal-meta-input"
-                        placeholder="分类（如：宏观 / 科技 / 消费…）"
-                        list="rp-category-presets"
-                        value={editCategory}
-                        onChange={e => setEditCategory(e.target.value)}
-                      />
-                      <datalist id="rp-category-presets">
-                        {reportCategories.filter(c => c !== '全部').map(c => (
-                          <option key={c} value={c} />
-                        ))}
-                      </datalist>
-                    </div>
-                  </div>
-                  <div className="rp-modal-header-right">
-                    {saveError && <span className="doc-save-error">{saveError}</span>}
-                    <button className="cancel-btn"
-                      onClick={() => { if (modalReport) setModalMode('read'); else closeModal(); }}
-                      disabled={savingReport}>取消</button>
-                    <button className="confirm-btn" onClick={handleSaveReport}
-                      disabled={savingReport}>
-                      {savingReport ? '保存中…' : '保存研报'}
-                    </button>
-                    <button className="icon-btn" onClick={closeModal}>✕</button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="rp-modal-body">
-              {modalMode === 'read' ? (
-                <div className="rp-modal-read-content doc-read-view">
-                  <DocEditor value={modalReport?.content || ''} onChange={() => {}} readonly />
-                </div>
-              ) : (
-                <div className="rp-modal-editor-wrap">
-                  <DocEditor
-                    ref={docEditorRef}
-                    value={editContent}
-                    onChange={v => { editContentRef.current = v; setEditContent(v); }}
-                  />
-                </div>
-              )}
-            </div>
-
-          </div>
-        </div>
+      {/* Edit view */}
+      {modalOpen && modalMode === 'edit' && (
+        <DocEditModal
+          titleValue={editTitle}
+          onTitleChange={v => { setEditTitle(v); if (saveError) setSaveError(''); }}
+          titlePlaceholder="报告标题 *"
+          metaFields={<>
+            <input
+              className="rp-modal-meta-input"
+              placeholder="来源（如：中信证券）"
+              value={editSource}
+              onChange={e => setEditSource(e.target.value)}
+            />
+            <input
+              className="rp-modal-meta-input"
+              placeholder="报告日期（如：2026-04-01）"
+              value={editReportDate}
+              onChange={e => setEditReportDate(e.target.value)}
+            />
+            <input
+              className="rp-modal-meta-input"
+              placeholder="分类（如：宏观 / 科技 / 消费…）"
+              list="rp-category-presets"
+              value={editCategory}
+              onChange={e => setEditCategory(e.target.value)}
+            />
+            <datalist id="rp-category-presets">
+              {reportCategories.filter(c => c !== '全部').map(c => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+            <select
+              className="rp-modal-meta-input"
+              value={editSectorId ?? ''}
+              onChange={e => setEditSectorId(Number(e.target.value))}
+              title="所属行业"
+            >
+              {sectors
+                .filter(s => !s.archived || s.id === editSectorId)
+                .map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+            </select>
+          </>}
+          content={editContent}
+          onContentChange={v => { editContentRef.current = v; setEditContent(v); }}
+          editorRef={docEditorRef}
+          saveLabel="保存研报"
+          saving={savingReport}
+          saveError={saveError}
+          onSave={handleSaveReport}
+          onCancel={() => { if (modalReport) setModalMode('read'); else closeModal(); }}
+          onClose={closeModal}
+        />
       )}
     </div>
   );

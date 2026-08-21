@@ -1,10 +1,18 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useDarkMode } from './useDarkMode';
-import { DocEditor, type DocEditorHandle } from './DocEditor';
+import { type DocEditorHandle } from './DocEditor';
 import CategorySidebar from './CategorySidebar';
+import DocRow from './DocRow';
+import DocFilterBar from './DocFilterBar';
+import DocCategoryPills from './DocCategoryPills';
+import DocListToolbar from './DocListToolbar';
+import DocEditModal from './DocEditModal';
+import { IdeaReadModal } from './IdeaReadModal';
 import {
   getIdeaCategories, createIdeaCategory, updateIdeaCategory, deleteIdeaCategory,
+  archiveIdeaCategory, unarchiveIdeaCategory,
   getIdeas, searchIdeas, createIdea, updateIdea, updateIdeaRating, deleteIdea,
+  getArchivedIdeas, archiveIdea, unarchiveIdea,
   getIdeaAttachments, uploadIdeaAttachment, deleteIdeaAttachment, getIdeaAttachmentDownloadUrl,
   getIdeaComments, createIdeaComment, updateIdeaComment, deleteIdeaComment,
   type IdeaCategory, type Idea, type IdeaAttachment, type IdeaComment,
@@ -13,13 +21,18 @@ import './App.css';
 
 interface IdeaModuleProps {
   onGoHome: () => void;
+  forceArchived?: boolean;
 }
 
-export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
+export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps) {
   const [darkMode, setDarkMode] = useDarkMode();
   const [categories, setCategories] = useState<IdeaCategory[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Archive view
+  const [archivedIdeas, setArchivedIdeas] = useState<Idea[]>([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
 
   // Sidebar filter: null = all, number = category id
   const [filter, setFilter] = useState<null | number>(null);
@@ -50,6 +63,9 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
+  // Drag & drop: move an idea card onto a category chip
+  const [dragIdeaId, setDragIdeaId] = useState<number | null>(null);
+
   const docEditorRef = useRef<DocEditorHandle>(null);
 
   // Attachments
@@ -60,10 +76,6 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
 
   // Comments
   const [comments, setComments] = useState<IdeaComment[]>([]);
-  const [newComment, setNewComment] = useState('');
-  const [submittingComment, setSubmittingComment] = useState(false);
-  const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
-  const [editingCommentContent, setEditingCommentContent] = useState('');
 
 
   // ── ESC closes modal (blocked in edit mode to prevent data loss) ──────────
@@ -166,8 +178,6 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     setModalOpen(true);
     setAttachments([]);
     setComments([]);
-    setNewComment('');
-    setEditingCommentId(null);
     getIdeaAttachments(idea.id).then(res => setAttachments(res.data)).catch(() => {});
     getIdeaComments(idea.id).then(res => setComments(res.data)).catch(() => {});
   };
@@ -250,8 +260,60 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     if (modalIdea?.id === idea.id) closeModal();
   };
 
-  const handleRating = async (idea: Idea, n: number, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const loadArchived = useCallback(async () => {
+    setLoadingArchived(true);
+    try {
+      const res = await getArchivedIdeas();
+      setArchivedIdeas(res.data);
+    } finally {
+      setLoadingArchived(false);
+    }
+  }, []);
+
+  useEffect(() => { if (forceArchived) loadArchived(); }, [forceArchived, loadArchived]);
+
+  const handleArchiveIdea = async (idea: Idea, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    await archiveIdea(idea.id);
+    setIdeas(prev => prev.filter(i => i.id !== idea.id));
+    if (modalIdea?.id === idea.id) closeModal();
+  };
+
+  const handleUnarchiveIdea = async (idea: Idea, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    await unarchiveIdea(idea.id);
+    setArchivedIdeas(prev => prev.filter(i => i.id !== idea.id));
+    if (modalIdea?.id === idea.id) closeModal();
+    await loadCategories(); // 恢复单篇可能令其文件夹重新变为活跃
+    await loadIdeas();
+  };
+
+  const handleArchiveFolder = async (cat: IdeaCategory) => {
+    if (!window.confirm(`归档整个文件夹「${cat.name}」？该文件夹及其下所有 Idea 都会被归档隐藏。`)) return;
+    await archiveIdeaCategory(cat.id);
+    if (filter === cat.id) setFilter(null);
+    await loadCategories();
+    await loadIdeas();
+  };
+
+  const handleUnarchiveFolder = async (cat: IdeaCategory) => {
+    await unarchiveIdeaCategory(cat.id);
+    if (filter === cat.id) setFilter(null);
+    await loadCategories();
+    await loadArchived();
+    if (!forceArchived) await loadIdeas();
+  };
+
+  const handleDeleteArchivedIdea = async (idea: Idea, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!window.confirm(`彻底删除「${idea.title}」？此操作不可恢复。`)) return;
+    await deleteIdea(idea.id);
+    setArchivedIdeas(prev => prev.filter(i => i.id !== idea.id));
+    if (modalIdea?.id === idea.id) closeModal();
+  };
+
+  const handleRating = async (idea: Idea, n: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     const newRating = idea.rating === n ? 0 : n; // click same star → clear
     try {
       const res = await updateIdeaRating(idea.id, newRating);
@@ -263,52 +325,40 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
   const stripHtml = (html: string) =>
     html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
 
+  // In forced-archive mode: only categories that have archived ideas, and filter list by selection.
+  const archivedCategoryIds = useMemo(() => new Set(archivedIdeas.map(i => i.categoryId)), [archivedIdeas]);
+  const archivedCategories = useMemo(
+    () => (forceArchived
+      ? categories.filter(c => c.archived || archivedCategoryIds.has(c.id))
+      : categories.filter(c => !c.archived)),
+    [forceArchived, categories, archivedCategoryIds],
+  );
+  const shownArchivedIdeas = useMemo(
+    () => (forceArchived && filter !== null ? archivedIdeas.filter(i => i.categoryId === filter) : archivedIdeas),
+    [forceArchived, filter, archivedIdeas],
+  );
+
   const filterLabel = () => {
     if (filter === null) return '全部 Idea';
     const cat = categories.find(c => c.id === filter);
     return cat ? cat.name : '全部 Idea';
   };
 
-  // ── Export PDF ─────────────────────────────────────────────────────────────
-  const handleExportPdf = (idea: Idea) => {
-    const stars = '★'.repeat(idea.rating) + '☆'.repeat(5 - idea.rating);
-    const metaParts = [
-      idea.categoryName ? `分类：${idea.categoryName}` : '',
-      idea.rating > 0 ? `评星：${stars}` : '',
-      idea.createdAt ? `录入日期：${new Date(idea.createdAt).toLocaleDateString('zh-CN')}` : '',
-    ].filter(Boolean).join('　|　');
-
-    const html = `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8" />
-  <title>${idea.title}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "PingFang SC","Microsoft YaHei","SimSun",sans-serif; font-size: 14px; color: #1a1a1a; background: #fff; padding: 40px 48px; }
-    .idea-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
-    .idea-meta { font-size: 12px; color: #666; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 24px; }
-    .idea-content { line-height: 1.8; }
-    .idea-content p { margin-bottom: .8em; }
-    .idea-content h1,.idea-content h2,.idea-content h3 { margin: 1em 0 .5em; font-weight: 600; }
-    .idea-content ul,.idea-content ol { margin: .5em 0 .8em 1.5em; }
-    .idea-content li { margin-bottom: .3em; }
-    .idea-content table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-    .idea-content th,.idea-content td { border: 1px solid #ccc; padding: 6px 10px; font-size: 13px; }
-    .idea-content th { background: #f5f5f5; font-weight: 600; }
-    .idea-content blockquote { border-left: 3px solid #ccc; padding-left: 12px; color: #555; margin: .8em 0; }
-    @media print { @page { size: A4; margin: 20mm 18mm; } }
-  </style>
-</head>
-<body>
-  <div class="idea-title">${idea.title}</div>
-  <div class="idea-meta">${metaParts}</div>
-  <div class="idea-content">${idea.content || '<p>（无内容）</p>'}</div>
-  <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };<\/script>
-</body>
-</html>`;
-    const win = window.open('', '_blank', 'width=900,height=700');
-    if (win) { win.document.write(html); win.document.close(); }
+  // ── Drag an idea card onto a folder chip to move it there ──────────────────
+  const handleMoveToCategory = async (cat: IdeaCategory) => {
+    const id = dragIdeaId;
+    setDragIdeaId(null);
+    if (id == null) return;
+    const idea = ideas.find(i => i.id === id);
+    if (!idea || idea.categoryId === cat.id) return;
+    await updateIdea(idea.id, {
+      title: idea.title,
+      content: idea.content,
+      categoryId: cat.id,
+      subCategory: idea.subCategory,
+      rating: idea.rating,
+    });
+    await loadIdeas();
   };
 
   // ── Attachment handlers ────────────────────────────────────────────────────
@@ -369,43 +419,6 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  // ── Comment handlers ───────────────────────────────────────────────────────
-  const handleAddComment = async () => {
-    if (!modalIdea || !newComment.trim()) return;
-    setSubmittingComment(true);
-    try {
-      const res = await createIdeaComment(modalIdea.id, newComment.trim());
-      setComments(prev => [...prev, res.data]);
-      setNewComment('');
-    } catch {
-      alert('评论发送失败，请重试。');
-    } finally {
-      setSubmittingComment(false);
-    }
-  };
-
-  const handleUpdateComment = async (commentId: number) => {
-    if (!modalIdea || !editingCommentContent.trim()) return;
-    try {
-      const res = await updateIdeaComment(modalIdea.id, commentId, editingCommentContent.trim());
-      setComments(prev => prev.map(c => c.id === commentId ? res.data : c));
-      setEditingCommentId(null);
-      setEditingCommentContent('');
-    } catch {
-      alert('评论更新失败。');
-    }
-  };
-
-  const handleDeleteComment = async (commentId: number) => {
-    if (!modalIdea || !window.confirm('确定删除该评论？')) return;
-    try {
-      await deleteIdeaComment(modalIdea.id, commentId);
-      setComments(prev => prev.filter(c => c.id !== commentId));
-    } catch {
-      alert('评论删除失败。');
-    }
-  };
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="app-container">
@@ -424,12 +437,18 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
       <main className="main-layout">
         {/* ── Sidebar ── */}
         <CategorySidebar
-          categories={categories}
+          categories={archivedCategories}
           filter={filter}
-          onSelect={(id) => { setFilter(id); setSearch(''); }}
+          onSelect={(id) => {
+            setFilter(id);
+            setSearch('');
+          }}
           onAdd={handleAddCat}
           onUpdate={handleUpdateCat}
           onDelete={handleDeleteCat}
+          onArchiveFolder={!forceArchived ? handleArchiveFolder : undefined}
+          onRestoreFolder={forceArchived ? handleUnarchiveFolder : undefined}
+          onDropItem={!forceArchived ? handleMoveToCategory : undefined}
         />
 
         {/* ── Main ── */}
@@ -437,61 +456,70 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
           <div className="rp-list-wrap">
 
             {/* Toolbar */}
-            <div className="rp-toolbar">
-              <span className="rp-toolbar-title">{filterLabel()}</span>
-              <span className="rp-toolbar-count">
-                {search.trim()
+            <DocListToolbar
+              title={forceArchived ? (filter !== null ? `📥 ${filterLabel()} · 已归档` : '📥 已归档 Idea') : filterLabel()}
+              count={forceArchived
+                ? (loadingArchived ? '…' : `${shownArchivedIdeas.length} 条`)
+                : (search.trim()
                   ? (searching ? '…' : `${displayIdeas.length} 条`)
-                  : `${displayIdeas.length}/${ideas.length} 条`}
-              </span>
-              <div style={{ flex: 1 }} />
-              <button className="rp-new-btn" onClick={openNewModal}>+ 新增 Idea</button>
-            </div>
+                  : `${displayIdeas.length}/${ideas.length} 条`)}
+            >
+              {!forceArchived && (
+                <button className="rp-new-btn" onClick={openNewModal}>+ 新增 Idea</button>
+              )}
+            </DocListToolbar>
 
+            {forceArchived ? (
+              loadingArchived ? (
+                <div className="research-empty-state">加载中…</div>
+              ) : shownArchivedIdeas.length === 0 ? (
+                <div className="research-empty-state">归档区暂无 Idea</div>
+              ) : (
+                <div className="rp-list">
+                  {shownArchivedIdeas.map(idea => (
+                    <DocRow
+                      key={idea.id}
+                      onClick={() => openReadModal(idea)}
+                      tags={<>
+                        {idea.categoryName && (
+                          <span className="rp-global-sector-tag">{idea.categoryName}</span>
+                        )}
+                        {idea.subCategory && (
+                          <span className="doc-category-pill active" style={{ fontSize: '0.68rem', padding: '1px 8px' }}>{idea.subCategory}</span>
+                        )}
+                      </>}
+                      title={idea.title}
+                      preview={idea.content ? stripHtml(idea.content) : ''}
+                      rating={idea.rating}
+                      date={new Date(idea.createdAt).toLocaleDateString('zh-CN')}
+                      actions={<>
+                        <button className="chip-edit-btn" title="恢复（取消归档）" style={{ marginLeft: 4 }}
+                          onClick={e => handleUnarchiveIdea(idea, e)}>♻️</button>
+                        <button className="chip-edit-btn" style={{ color: 'var(--danger)' }} title="彻底删除"
+                          onClick={e => handleDeleteArchivedIdea(idea, e)}>✕</button>
+                      </>}
+                    />
+                  ))}
+                </div>
+              )
+            ) : (
+            <>
             {/* Search + star filter bar */}
-            <div className="rp-filter-bar">
-              <div className="rp-search-wrap">
-                <input
-                  className="rp-search-input"
-                  placeholder="全局搜索 Idea 标题 / 内容…"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                />
-                {search && (
-                  <button
-                    className="rp-scope-toggle"
-                    onClick={() => setSearch('')}
-                    title="清空搜索"
-                  >✕</button>
-                )}
-              </div>
-              <div className="rp-star-filters">
-                {[0, 1, 2, 3, 4, 5].map(n => (
-                  <button
-                    key={n}
-                    className={`rp-star-filter-btn${starFilter === n ? ' active' : ''}`}
-                    onClick={() => setStarFilter(n)}
-                    title={n === 0 ? '全部' : `${n}星及以上`}
-                  >
-                    {n === 0 ? '全部' : '★'.repeat(n)}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <DocFilterBar
+              search={search}
+              onSearchChange={setSearch}
+              searchPlaceholder="全局搜索 Idea 标题 / 内容…"
+              starFilter={starFilter}
+              onStarFilterChange={setStarFilter}
+            />
 
             {/* Sub-category pills — shown when folder is selected and sub-categories exist */}
             {!search.trim() && ideaSubCategories.length > 1 && (
-              <div className="doc-category-pills">
-                {ideaSubCategories.map(cat => (
-                  <button
-                    key={cat}
-                    className={`doc-category-pill${subCategoryFilter === cat ? ' active' : ''}`}
-                    onClick={() => setSubCategoryFilter(cat)}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
+              <DocCategoryPills
+                options={ideaSubCategories}
+                value={subCategoryFilter}
+                onChange={setSubCategoryFilter}
+              />
             )}
 
             {/* List */}
@@ -506,338 +534,180 @@ export default function IdeaModule({ onGoHome }: IdeaModuleProps) {
             ) : (
               <div className="rp-list">
                 {displayIdeas.map(idea => (
-                  <div key={idea.id} className="rp-row" onClick={() => openReadModal(idea)}>
-                    <div className="rp-row-main">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        {idea.categoryName && (
-                          <span className="rp-global-sector-tag">{idea.categoryName}</span>
-                        )}                          {idea.subCategory && (
-                            <span className="doc-category-pill active" style={{ fontSize: '0.68rem', padding: '1px 8px' }}>{idea.subCategory}</span>
-                          )}                        <span className="rp-row-title">{idea.title}</span>
-                      </div>
-                      {idea.content && (
-                        <span className="rp-row-preview">{stripHtml(idea.content)}</span>
+                  <DocRow
+                    key={idea.id}
+                    draggable
+                    dragging={dragIdeaId === idea.id}
+                    onDragStart={e => { setDragIdeaId(idea.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    onDragEnd={() => setDragIdeaId(null)}
+                    onClick={() => openReadModal(idea)}
+                    tags={<>
+                      {idea.categoryName && (
+                        <span className="rp-global-sector-tag">{idea.categoryName}</span>
                       )}
-                    </div>
-                    <div className="rp-row-right">
-                      <div className="rp-row-stars" onClick={e => e.stopPropagation()}>
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <span
-                            key={n}
-                            className={`star-btn${idea.rating >= n ? ' filled' : ''}`}
-                            onClick={e => handleRating(idea, n, e)}
-                            title={`评为 ${n} 星`}
-                          >
-                            {idea.rating >= n ? '★' : '☆'}
-                          </span>
-                        ))}
-                      </div>
-                      <span className="rp-row-date">
-                        {new Date(idea.createdAt).toLocaleDateString('zh-CN')}
-                      </span>
+                      {idea.subCategory && (
+                        <span className="doc-category-pill active" style={{ fontSize: '0.68rem', padding: '1px 8px' }}>{idea.subCategory}</span>
+                      )}
+                    </>}
+                    title={idea.title}
+                    preview={idea.content ? stripHtml(idea.content) : ''}
+                    rating={idea.rating}
+                    onRate={n => handleRating(idea, n)}
+                    date={new Date(idea.createdAt).toLocaleDateString('zh-CN')}
+                    actions={<>
+                      <button
+                        className="chip-edit-btn"
+                        style={{ marginLeft: 4 }}
+                        title="归档"
+                        onClick={e => handleArchiveIdea(idea, e)}
+                      >📥</button>
                       <button
                         className="chip-edit-btn"
                         style={{ color: 'var(--danger)', marginLeft: 4 }}
                         title="删除"
                         onClick={e => handleDelete(idea, e)}
                       >✕</button>
-                    </div>
-                  </div>
+                    </>}
+                  />
                 ))}
               </div>
+            )}
+            </>
             )}
           </div>
         </div>
       </main>
 
       {/* ── Modal ── */}
-      {modalOpen && (
-        <div className="rp-modal-overlay" onClick={() => { if (modalMode !== 'edit') closeModal(); }}>
-          <div className="rp-modal" onClick={e => e.stopPropagation()}>
+      {/* Read view — shared component (also used by the archive center) */}
+      {modalOpen && modalMode === 'read' && modalIdea && (
+        <IdeaReadModal
+          idea={modalIdea}
+          attachments={attachments}
+          comments={comments}
+          onClose={closeModal}
+          onRate={(n) => handleRating(modalIdea, n)}
+          onEdit={() => switchToEdit(modalIdea)}
+          headerExtra={
+            modalIdea.archived ? (
+              <button className="icon-btn" onClick={() => handleUnarchiveIdea(modalIdea)} title="恢复">♻️ 恢复</button>
+            ) : (
+              <button className="icon-btn" onClick={() => handleArchiveIdea(modalIdea)} title="归档">📥 归档</button>
+            )
+          }
+          onAddComment={async (content) => {
+            const res = await createIdeaComment(modalIdea.id, content);
+            setComments(prev => [...prev, res.data]);
+          }}
+          onUpdateComment={async (id, content) => {
+            const res = await updateIdeaComment(modalIdea.id, id, content);
+            setComments(prev => prev.map(c => c.id === id ? res.data : c));
+          }}
+          onDeleteComment={async (id) => {
+            if (!window.confirm('确定删除该评论？')) return;
+            await deleteIdeaComment(modalIdea.id, id);
+            setComments(prev => prev.filter(c => c.id !== id));
+          }}
+        />
+      )}
 
-            <div className="rp-modal-header">
-              {modalMode === 'read' ? (
-                <>
-                  <div className="rp-modal-header-left">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      {modalIdea?.categoryName && (
-                        <span className="rp-global-sector-tag">{modalIdea.categoryName}</span>
-                      )}
-                      <span className="rp-modal-title-display">{modalIdea?.title}</span>
+      {/* Edit view */}
+      {modalOpen && modalMode === 'edit' && (
+        <DocEditModal
+          titleValue={editTitle}
+          onTitleChange={v => { setEditTitle(v); if (saveError) setSaveError(''); }}
+          titlePlaceholder="Idea 标题 *"
+          metaFields={<>
+            <input
+              className="rp-modal-meta-input"
+              placeholder="文件夹分类（可直接输入新分类名）"
+              list="idea-category-list"
+              value={editCategoryName}
+              onChange={e => setEditCategoryName(e.target.value)}
+            />
+            <datalist id="idea-category-list">
+              {categories.map(cat => (
+                <option key={cat.id} value={cat.name} />
+              ))}
+            </datalist>
+            <input
+              className="rp-modal-meta-input"
+              placeholder="子分类（如：策略 / 交易 / 观察…）"
+              list="idea-subcategory-list"
+              value={editSubCategory}
+              onChange={e => setEditSubCategory(e.target.value)}
+            />
+            <datalist id="idea-subcategory-list">
+              {ideaSubCategories.filter(c => c !== '全部').map(c => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </>}
+          rating={editRating}
+          onRatingChange={setEditRating}
+          content={editContent}
+          onContentChange={v => { editContentRef.current = v; setEditContent(v); }}
+          editorRef={docEditorRef}
+          saveLabel="保存 Idea"
+          saving={saving}
+          saveError={saveError}
+          onSave={handleSave}
+          onCancel={() => { if (modalIdea) setModalMode('read'); else closeModal(); }}
+          onClose={closeModal}
+          onDelete={modalIdea ? () => handleDelete(modalIdea) : undefined}
+          bodyExtra={!!modalIdea && (
+            <div
+              className={`idea-attachments-section${dragOver ? ' drag-over' : ''}`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              <div className="idea-attachments-header">
+                <span className="idea-attachments-title">📎 附件{attachments.length > 0 ? ` (${attachments.length})` : ''}</span>
+                <button
+                  className="idea-attach-upload-btn"
+                  onClick={() => attachInputRef.current?.click()}
+                  disabled={uploadingAttachment}
+                >
+                  {uploadingAttachment ? '⏳ 上传中…' : '＋ 上传附件'}
+                </button>
+                <input
+                  ref={attachInputRef}
+                  type="file"
+                  style={{ display: 'none' }}
+                  onChange={handleAttachmentUpload}
+                />
+              </div>
+              {attachments.length > 0 && (
+                <div className="idea-attachments-list">
+                  {attachments.map(att => (
+                    <div key={att.id} className="idea-attachment-item">
+                      <a
+                        href={getIdeaAttachmentDownloadUrl(att.ideaId, att.id)}
+                        className="idea-attachment-link"
+                        download={att.fileName}
+                        title={`下载 ${att.fileName}`}
+                      >
+                        <span className="idea-attachment-icon">📄</span>
+                        <span className="idea-attachment-name">{att.fileName}</span>
+                        <span className="idea-attachment-size">{formatFileSize(att.fileSize)}</span>
+                      </a>
+                      <button
+                        className="chip-edit-btn"
+                        style={{ color: 'var(--danger)' }}
+                        title="删除附件"
+                        onClick={() => handleAttachmentDelete(att)}
+                      >✕</button>
                     </div>
-                    <div className="rp-modal-meta">
-                      <div className="star-rating-inline" onClick={e => e.stopPropagation()}>
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <span
-                            key={n}
-                            className={`star-btn${(modalIdea?.rating ?? 0) >= n ? ' filled' : ''}`}
-                            onClick={e => modalIdea && handleRating(modalIdea, n, e)}
-                            title={`设为 ${n} 星`}
-                          >
-                            {(modalIdea?.rating ?? 0) >= n ? '★' : '☆'}
-                          </span>
-                        ))}
-                      </div>
-                      {modalIdea?.subCategory && (
-                        <span className="research-meta-tag">{modalIdea.subCategory}</span>
-                      )}
-                      {modalIdea?.createdAt &&
-                        <span className="research-meta-date">{new Date(modalIdea.createdAt).toLocaleDateString('zh-CN')}</span>}
-                    </div>
-                  </div>
-                  <div className="rp-modal-header-right">
-                    <button className="icon-btn" onClick={() => modalIdea && handleExportPdf(modalIdea)}>
-                      ⬇ 导出PDF
-                    </button>
-                    <button className="icon-btn" onClick={() => modalIdea && switchToEdit(modalIdea)}>
-                      ✎ 编辑
-                    </button>
-                    <button className="icon-btn" onClick={closeModal}>✕ 关闭</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="rp-modal-header-left rp-modal-edit-meta">
-                    <input
-                      className="rp-modal-title-input"
-                      placeholder="Idea 标题 *"
-                      value={editTitle}
-                      onChange={e => { setEditTitle(e.target.value); if (saveError) setSaveError(''); }}
-                      autoFocus
-                    />
-                    <div className="rp-modal-meta-inputs">
-                      <input
-                        className="rp-modal-meta-input"
-                        placeholder="文件夹分类（可直接输入新分类名）"
-                        list="idea-category-list"
-                        value={editCategoryName}
-                        onChange={e => setEditCategoryName(e.target.value)}
-                      />
-                      <datalist id="idea-category-list">
-                        {categories.map(cat => (
-                          <option key={cat.id} value={cat.name} />
-                        ))}
-                      </datalist>
-                      <input
-                        className="rp-modal-meta-input"
-                        placeholder="子分类（如：策略 / 交易 / 观察…）"
-                        list="idea-subcategory-list"
-                        value={editSubCategory}
-                        onChange={e => setEditSubCategory(e.target.value)}
-                      />
-                      <datalist id="idea-subcategory-list">
-                        {ideaSubCategories.filter(c => c !== '全部').map(c => (
-                          <option key={c} value={c} />
-                        ))}
-                      </datalist>
-                      <div className="star-rating-inline">
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <span
-                            key={n}
-                            className={`star-btn${editRating >= n ? ' filled' : ''}`}
-                            onClick={() => setEditRating(prev => prev === n ? 0 : n)}
-                            title={`评为 ${n} 星`}
-                          >
-                            {editRating >= n ? '★' : '☆'}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="rp-modal-header-right">
-                    {saveError && <span className="doc-save-error">{saveError}</span>}
-                    {modalIdea && (
-                      <button className="cancel-btn" style={{ color: 'var(--danger)' }}
-                        onClick={() => handleDelete(modalIdea)} disabled={saving}>删除</button>
-                    )}
-                    <button className="cancel-btn"
-                      onClick={() => { if (modalIdea) setModalMode('read'); else closeModal(); }}
-                      disabled={saving}>取消</button>
-                    <button className="confirm-btn" onClick={handleSave} disabled={saving}>
-                      {saving ? '保存中…' : '保存 Idea'}
-                    </button>
-                    <button className="icon-btn" onClick={closeModal}>✕</button>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="rp-modal-body">
-              {modalMode === 'read' ? (
-                /* ── Read mode: one unified scroll container ── */
-                <div className="rp-modal-read-scroll">
-                  <div className="rp-modal-read-content doc-read-view">
-                    <DocEditor value={modalIdea?.content || ''} onChange={() => {}} readonly />
-                  </div>
-
-                  {/* Attachments – read mode */}
-                  {attachments.length > 0 && (
-                    <div className="idea-attachments-section">
-                      <div className="idea-attachments-header">
-                        <span className="idea-attachments-title">📎 附件 ({attachments.length})</span>
-                      </div>
-                      <div className="idea-attachments-list">
-                        {attachments.map(att => (
-                          <div key={att.id} className="idea-attachment-item">
-                            <a
-                              href={getIdeaAttachmentDownloadUrl(att.ideaId, att.id)}
-                              className="idea-attachment-link"
-                              download={att.fileName}
-                              title={`下载 ${att.fileName}`}
-                            >
-                              <span className="idea-attachment-icon">📄</span>
-                              <span className="idea-attachment-name">{att.fileName}</span>
-                              <span className="idea-attachment-size">{formatFileSize(att.fileSize)}</span>
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Comments – read mode */}
-                  {modalIdea && (
-                    <div className="idea-comments-section">
-                      <div className="idea-comments-header">
-                        <span className="idea-comments-title">💬 评论{comments.length > 0 ? ` (${comments.length})` : ''}</span>
-                      </div>
-
-                      {comments.length > 0 && (
-                        <div className="idea-comments-list">
-                          {comments.map(comment => (
-                            <div key={comment.id} className="idea-comment-item">
-                              {editingCommentId === comment.id ? (
-                                <div className="idea-comment-edit-wrap">
-                                  <textarea
-                                    className="idea-comment-edit-textarea"
-                                    value={editingCommentContent}
-                                    onChange={e => setEditingCommentContent(e.target.value)}
-                                    autoFocus
-                                  />
-                                  <div className="idea-comment-edit-actions">
-                                    <button className="small-btn" onClick={() => handleUpdateComment(comment.id)}>保存</button>
-                                    <button className="small-btn" onClick={() => { setEditingCommentId(null); setEditingCommentContent(''); }}>取消</button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="idea-comment-content">{comment.content}</div>
-                                  <div className="idea-comment-meta">
-                                    <span className="idea-comment-time">
-                                      {new Date(comment.createdAt).toLocaleString('zh-CN')}
-                                      {comment.updatedAt !== comment.createdAt && ' (已编辑)'}
-                                    </span>
-                                    <div className="idea-comment-actions">
-                                      <button
-                                        className="idea-comment-action-btn"
-                                        title="编辑"
-                                        onClick={() => { setEditingCommentId(comment.id); setEditingCommentContent(comment.content); }}
-                                      >✎</button>
-                                      <button
-                                        className="idea-comment-action-btn danger"
-                                        title="删除"
-                                        onClick={() => handleDeleteComment(comment.id)}
-                                      >✕</button>
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="idea-comment-input-wrap">
-                        <textarea
-                          className="idea-comment-textarea"
-                          placeholder="写下你的评论…"
-                          value={newComment}
-                          onChange={e => setNewComment(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleAddComment();
-                          }}
-                          rows={2}
-                        />
-                        <button
-                          className="idea-comment-submit-btn"
-                          onClick={handleAddComment}
-                          disabled={submittingComment || !newComment.trim()}
-                        >
-                          {submittingComment ? '发送中…' : '发送'}
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  ))}
                 </div>
-              ) : (
-                /* ── Edit mode: editor + attachments ── */
-                <>
-                  <div className="rp-modal-editor-wrap">
-                    <DocEditor
-                      ref={docEditorRef}
-                      value={editContent}
-                      onChange={v => { editContentRef.current = v; setEditContent(v); }}
-                    />
-                  </div>
-
-                  {!!modalIdea && (
-                    <div
-                      className={`idea-attachments-section${dragOver ? ' drag-over' : ''}`}
-                      onDrop={handleDrop}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                    >
-                      <div className="idea-attachments-header">
-                        <span className="idea-attachments-title">📎 附件{attachments.length > 0 ? ` (${attachments.length})` : ''}</span>
-                        <button
-                          className="idea-attach-upload-btn"
-                          onClick={() => attachInputRef.current?.click()}
-                          disabled={uploadingAttachment}
-                        >
-                          {uploadingAttachment ? '⏳ 上传中…' : '＋ 上传附件'}
-                        </button>
-                        <input
-                          ref={attachInputRef}
-                          type="file"
-                          style={{ display: 'none' }}
-                          onChange={handleAttachmentUpload}
-                        />
-                      </div>
-                      {attachments.length > 0 && (
-                        <div className="idea-attachments-list">
-                          {attachments.map(att => (
-                            <div key={att.id} className="idea-attachment-item">
-                              <a
-                                href={getIdeaAttachmentDownloadUrl(att.ideaId, att.id)}
-                                className="idea-attachment-link"
-                                download={att.fileName}
-                                title={`下载 ${att.fileName}`}
-                              >
-                                <span className="idea-attachment-icon">📄</span>
-                                <span className="idea-attachment-name">{att.fileName}</span>
-                                <span className="idea-attachment-size">{formatFileSize(att.fileSize)}</span>
-                              </a>
-                              <button
-                                className="chip-edit-btn"
-                                style={{ color: 'var(--danger)' }}
-                                title="删除附件"
-                                onClick={() => handleAttachmentDelete(att)}
-                              >✕</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {attachments.length === 0 && (
-                        <div className="idea-attachments-empty">将文件拖拽到此处，或点击上方按钮上传</div>
-                      )}
-                    </div>
-                  )}
-                </>
+              )}
+              {attachments.length === 0 && (
+                <div className="idea-attachments-empty">将文件拖拽到此处，或点击上方按钮上传</div>
               )}
             </div>
-
-          </div>
-        </div>
+          )}
+        />
       )}
     </div>
   );

@@ -35,6 +35,13 @@ public class Idea {
     @Column(nullable = false, columnDefinition = "integer default 0")
     private int rating = 0;
 
+    /** 是否已归档 */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean archived = false;
+
+    /** 归档时间，恢复时置 null */
+    private LocalDateTime archivedAt;
+
     @Column(nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

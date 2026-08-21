@@ -15,4 +15,8 @@ public class IdeaCategory {
 
     @Column(nullable = false, unique = true, length = 100)
     private String name;
+
+    /** 整个文件夹是否已归档（手动控制，独立于文章的归档状态） */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean archived = false;
 }

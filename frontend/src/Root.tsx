@@ -7,8 +7,9 @@ import TechCycleModule from './TechCycleModule';
 import IdeaModule from './IdeaModule';
 import TradeModule from './TradeModule';
 import ValuationModule from './ValuationModule';
+import ArchiveModule from './ArchiveModule';
 
-export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle' | 'ideas' | 'trades' | 'valuation';
+export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle' | 'ideas' | 'trades' | 'valuation' | 'archive';
 
 export default function Root() {
   const [module, setModule] = useState<ModuleId>(() => {
@@ -40,6 +41,9 @@ export default function Root() {
   }
   if (module === 'valuation') {
     return <ValuationModule onGoHome={() => setModule('home')} />;
+  }
+  if (module === 'archive') {
+    return <ArchiveModule onGoHome={() => setModule('home')} />;
   }
   return <HomePage onSelectModule={setModule} />;
 }

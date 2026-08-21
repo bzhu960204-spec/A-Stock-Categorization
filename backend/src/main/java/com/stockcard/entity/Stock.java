@@ -69,6 +69,11 @@ public class Stock {
     @Column(length = 100)
     private String recommender; // 推荐人（可选）
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean archived = false; // 是否已归档
+
+    private java.time.LocalDateTime archivedAt; // 归档时间，恢复时置 null
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "stock_categories",

@@ -52,6 +52,20 @@ public class ResearchController {
         };
     }
 
+    @PatchMapping("/sectors/{id}/archive")
+    public ResponseEntity<Sector> archiveSector(@PathVariable Long id) {
+        return researchService.archiveSector(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/sectors/{id}/unarchive")
+    public ResponseEntity<Sector> unarchiveSector(@PathVariable Long id) {
+        return researchService.unarchiveSector(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     // ===== SectorReport APIs =====
 
     @Data
@@ -63,12 +77,19 @@ public class ResearchController {
         private String reportDate;
         private String category;
         private Integer rating;
+        private Long targetSectorId;
     }
 
     @Data
     @NoArgsConstructor
     static class RatingPayload {
         private Integer rating;
+    }
+
+    @Data
+    @NoArgsConstructor
+    static class MovePayload {
+        private Long targetSectorId;
     }
 
     @Data
@@ -82,6 +103,8 @@ public class ResearchController {
         private String reportDate;
         private String category;
         private int rating;
+        private boolean archived;
+        private String archivedAt;
         private String createdAt;
         private String updatedAt;
 
@@ -96,6 +119,8 @@ public class ResearchController {
             dto.reportDate = r.getReportDate();
             dto.category = r.getCategory();
             dto.rating = r.getRating();
+            dto.archived = r.isArchived();
+            dto.archivedAt = r.getArchivedAt() != null ? r.getArchivedAt().toString() : null;
             dto.createdAt = r.getCreatedAt() != null ? r.getCreatedAt().toString() : null;
             dto.updatedAt = r.getUpdatedAt() != null ? r.getUpdatedAt().toString() : null;
             return dto;
@@ -107,6 +132,11 @@ public class ResearchController {
         return researchService.getReports(sectorId)
                 .map(list -> ResponseEntity.ok(list.stream().map(ReportDto::from).collect(Collectors.toList())))
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/reports")
+    public List<ReportDto> getAllReports() {
+        return researchService.getAllActiveReports().stream().map(ReportDto::from).collect(Collectors.toList());
     }
 
     @PostMapping("/sectors/{sectorId}/reports")
@@ -126,7 +156,21 @@ public class ResearchController {
             @PathVariable Long reportId,
             @RequestBody ReportPayload payload) {
         return researchService.updateReport(sectorId, reportId, payload.getTitle(), payload.getContent(),
-                        payload.getSource(), payload.getReportDate(), payload.getCategory(), payload.getRating())
+                        payload.getSource(), payload.getReportDate(), payload.getCategory(), payload.getRating(),
+                        payload.getTargetSectorId())
+                .map(report -> ResponseEntity.ok(ReportDto.from(report)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/sectors/{sectorId}/reports/{reportId}/move")
+    public ResponseEntity<ReportDto> moveReport(
+            @PathVariable Long sectorId,
+            @PathVariable Long reportId,
+            @RequestBody MovePayload payload) {
+        if (payload.getTargetSectorId() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return researchService.moveReport(sectorId, reportId, payload.getTargetSectorId())
                 .map(report -> ResponseEntity.ok(ReportDto.from(report)))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -149,6 +193,26 @@ public class ResearchController {
         return researchService.deleteReport(sectorId, reportId)
                 ? ResponseEntity.ok().build()
                 : ResponseEntity.notFound().build();
+    }
+
+    // ===== Archive =====
+    @GetMapping("/reports/archived")
+    public List<ReportDto> getArchivedReports() {
+        return researchService.getArchivedReports().stream().map(ReportDto::from).collect(Collectors.toList());
+    }
+
+    @PatchMapping("/sectors/{sectorId}/reports/{reportId}/archive")
+    public ResponseEntity<ReportDto> archiveReport(@PathVariable Long sectorId, @PathVariable Long reportId) {
+        return researchService.setReportArchived(sectorId, reportId, true)
+                .map(report -> ResponseEntity.ok(ReportDto.from(report)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/sectors/{sectorId}/reports/{reportId}/unarchive")
+    public ResponseEntity<ReportDto> unarchiveReport(@PathVariable Long sectorId, @PathVariable Long reportId) {
+        return researchService.setReportArchived(sectorId, reportId, false)
+                .map(report -> ResponseEntity.ok(ReportDto.from(report)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // ===== Global search across all sectors =====

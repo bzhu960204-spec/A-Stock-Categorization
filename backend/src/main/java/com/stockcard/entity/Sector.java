@@ -15,4 +15,8 @@ public class Sector {
 
     @Column(nullable = false, unique = true)
     private String name; // 行业名称，如 "半导体"、"消费"
+
+    /** 整个文件夹是否已归档（手动控制，独立于研报的归档状态） */
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    private boolean archived = false;
 }

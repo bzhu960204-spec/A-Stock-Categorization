@@ -54,6 +54,8 @@ public class IdeaController {
         private String title;
         private String content;
         private int rating;
+        private boolean archived;
+        private String archivedAt;
         private String createdAt;
         private String updatedAt;
 
@@ -66,6 +68,8 @@ public class IdeaController {
             dto.title = idea.getTitle();
             dto.content = idea.getContent();
             dto.rating = idea.getRating();
+            dto.archived = idea.isArchived();
+            dto.archivedAt = idea.getArchivedAt() != null ? idea.getArchivedAt().toString() : null;
             dto.createdAt = idea.getCreatedAt() != null ? idea.getCreatedAt().toString() : null;
             dto.updatedAt = idea.getUpdatedAt() != null ? idea.getUpdatedAt().toString() : null;
             return dto;
@@ -103,6 +107,20 @@ public class IdeaController {
             case HAS_IDEAS -> ResponseEntity.status(409).build();
             case DELETED -> ResponseEntity.ok().build();
         };
+    }
+
+    @PatchMapping("/categories/{id}/archive")
+    public ResponseEntity<IdeaCategory> archiveCategory(@PathVariable Long id) {
+        return ideaService.archiveCategory(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/categories/{id}/unarchive")
+    public ResponseEntity<IdeaCategory> unarchiveCategory(@PathVariable Long id) {
+        return ideaService.unarchiveCategory(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // ── Idea endpoints ────────────────────────────────────────────────────────
@@ -158,6 +176,27 @@ public class IdeaController {
         return ideaService.delete(id)
                 ? ResponseEntity.ok().build()
                 : ResponseEntity.notFound().build();
+    }
+
+    // ── Archive ─────────────────────────────────────────────────
+
+    @GetMapping("/archived")
+    public List<IdeaDto> getArchivedIdeas() {
+        return ideaService.getArchived().stream().map(IdeaDto::from).collect(Collectors.toList());
+    }
+
+    @PatchMapping("/{id}/archive")
+    public ResponseEntity<IdeaDto> archiveIdea(@PathVariable Long id) {
+        return ideaService.setArchived(id, true)
+                .map(idea -> ResponseEntity.ok(IdeaDto.from(idea)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @PatchMapping("/{id}/unarchive")
+    public ResponseEntity<IdeaDto> unarchiveIdea(@PathVariable Long id) {
+        return ideaService.setArchived(id, false)
+                .map(idea -> ResponseEntity.ok(IdeaDto.from(idea)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     // ── Attachment endpoints ──────────────────────────────────────────────────

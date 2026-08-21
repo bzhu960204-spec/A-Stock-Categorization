@@ -85,6 +85,19 @@ const MODULE_GROUPS: ModuleGroup[] = [
       },
     ],
   },
+  {
+    groupLabel: '系统',
+    groupLabelEn: 'SYSTEM',
+    modules: [
+      {
+        id: 'archive',
+        label: '归档中心',
+        labelEn: 'ARCHIVE',
+        description: '集中查看与管理各模块的归档内容，随时恢复或彻底删除',
+        icon: '📦',
+      },
+    ],
+  },
 ];
 
 interface HomePageProps {
