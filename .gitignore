@@ -15,6 +15,11 @@ backend/target/
 backend/data/
 backend/data
 
+# ===== Prod build =====
+logs/
+.stockcard-prod-state.json
+.java-home
+
 # ===== IDE =====
 .idea/
 *.iml
