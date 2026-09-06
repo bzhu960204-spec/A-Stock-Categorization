@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useDarkMode } from './useDarkMode';
+import { ThemePicker } from './ThemePicker';
 import type { ModuleId } from './Root';
 import { getConfig, saveConfig } from './api';
 
@@ -83,6 +83,13 @@ const MODULE_GROUPS: ModuleGroup[] = [
         description: '记录影响金融市场的重要事件，按月浏览与管理',
         icon: '🗓',
       },
+      {
+        id: 'earnings-calendar',
+        label: '财报日历',
+        labelEn: 'EARNINGS CALENDAR',
+        description: '拉取美股大盘股财报发布日程，按月浏览、板块筛选与记录笔记',
+        icon: '📈',
+      },
     ],
   },
   {
@@ -105,7 +112,6 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onSelectModule }: HomePageProps) {
-  const [darkMode, setDarkMode] = useDarkMode();
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [apiKeySaving, setApiKeySaving] = useState(false);
@@ -159,9 +165,7 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
             title="设置"
             onClick={() => setShowSettings(v => !v)}
           >⚙</button>
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? 'LITE' : 'TERM'}
-          </button>
+          <ThemePicker />
         </div>
       </header>
 

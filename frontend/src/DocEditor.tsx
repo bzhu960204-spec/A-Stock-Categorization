@@ -228,38 +228,60 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
         forceUpdate(n => n + 1);
       },
       editorProps: {
+        // Sanitize rich pastes: drop <style>/<script>/comments so their text
+        // (e.g. leaked CSS) never lands in the document. Keep everything else
+        // (headings, bold, tables, images…) so the clipboard's formatting survives.
+        transformPastedHTML: (html) =>
+          html
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<!--[\s\S]*?-->/g, ''),
         handlePaste: (_, event) => {
           const items = event.clipboardData?.items;
-          if (!items) return false;
-          for (const item of Array.from(items)) {
-            if (item.type.startsWith('image/')) {
-              event.preventDefault();
-              const file = item.getAsFile();
-              if (!file) return true;
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                const src = e.target?.result as string;
-                editor?.chain().focus().setImage({ src }).run();
-                suppressSyncRef.current = true;
-                onChange(editor?.getHTML() ?? '');
-                requestAnimationFrame(() => { suppressSyncRef.current = false; });
-              };
-              reader.readAsDataURL(file);
-              return true;
+          if (items) {
+            for (const item of Array.from(items)) {
+              if (item.type.startsWith('image/')) {
+                event.preventDefault();
+                const file = item.getAsFile();
+                if (!file) return true;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  const src = e.target?.result as string;
+                  editor?.chain().focus().setImage({ src }).run();
+                  suppressSyncRef.current = true;
+                  onChange(editor?.getHTML() ?? '');
+                  requestAnimationFrame(() => { suppressSyncRef.current = false; });
+                };
+                reader.readAsDataURL(file);
+                return true;
+              }
             }
           }
-          // Parse as markdown if pasted text contains markdown patterns
-          const text = event.clipboardData?.getData('text/plain') ?? '';
-          const looksLikeMarkdown = /(?:^#{1,6} |^[-*+] |\d+\. |^>|^\|.*\||\*\*|__|```)/m.test(text);
-          if (text && looksLikeMarkdown) {
+
+          const plain = event.clipboardData?.getData('text/plain') ?? '';
+          const html = event.clipboardData?.getData('text/html') ?? '';
+
+          const renderMarkdown = () => {
             event.preventDefault();
-            const html = marked.parse(text) as string;
-            editor?.commands.insertContent(html);
+            editor?.commands.insertContent(marked.parse(plain) as string);
             suppressSyncRef.current = true;
             onChange(editor?.getHTML() ?? '');
             requestAnimationFrame(() => { suppressSyncRef.current = false; });
             return true;
-          }
+          };
+
+          // Fenced code blocks can't survive the clipboard's own HTML (whitespace
+          // in ASCII/box-art diagrams collapses), so render the Markdown ourselves.
+          const hasFencedCode = /```[\s\S]*?```/.test(plain);
+          if (plain && hasFencedCode) return renderMarkdown();
+
+          // Only convert Markdown ourselves when there's NO rich HTML on the
+          // clipboard (e.g. pasting raw .md source). When rich HTML exists, trust
+          // it — that preserves headings/bold/tables/lists/links verbatim.
+          const looksLikeMarkdown = /(?:^#{1,6} |^[-*+] |^\d+\. |^>|^\|.*\||\*\*|__|^---\s*$)/m.test(plain);
+          if (!html && plain && looksLikeMarkdown) return renderMarkdown();
+
+          // Otherwise keep Tiptap's native paste (preserves rich clipboard HTML).
           return false;
         },
       },

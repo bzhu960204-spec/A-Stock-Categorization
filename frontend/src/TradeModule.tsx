@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useDarkMode } from './useDarkMode';
+import { ThemePicker } from './ThemePicker';
 import { type DocEditorHandle } from './DocEditor';
 import CategorySidebar from './CategorySidebar';
 import DocRow from './DocRow';
@@ -21,7 +21,6 @@ interface TradeModuleProps {
 }
 
 export default function TradeModule({ onGoHome }: TradeModuleProps) {
-  const [darkMode, setDarkMode] = useDarkMode();
   const [categories, setCategories] = useState<TradeCategory[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(false);
@@ -296,9 +295,7 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
           <h1 className="app-title">交易记录</h1>
         </div>
         <div className="header-right">
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? 'LITE' : 'TERM'}
-          </button>
+          <ThemePicker />
         </div>
       </header>
 

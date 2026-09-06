@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useDarkMode } from './useDarkMode';
+import { ThemePicker } from './ThemePicker';
 import App from './App';
 import ResearchModule from './ResearchModule';
 import IdeaModule from './IdeaModule';
@@ -18,7 +18,6 @@ const KINDS: Array<{ id: Kind; icon: string; label: string; labelEn: string; des
 ];
 
 export default function ArchiveModule({ onGoHome }: ArchiveModuleProps) {
-  const [darkMode, setDarkMode] = useDarkMode();
   const [selected, setSelected] = useState<Kind | null>(null);
 
   const backToSelector = () => setSelected(null);
@@ -41,9 +40,7 @@ export default function ArchiveModule({ onGoHome }: ArchiveModuleProps) {
           <h1 className="app-title">Archive Center</h1>
         </div>
         <div className="header-right">
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? 'LITE' : 'TERM'}
-          </button>
+          <ThemePicker />
         </div>
       </header>
 

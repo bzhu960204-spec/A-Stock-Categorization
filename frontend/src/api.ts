@@ -252,6 +252,43 @@ export const updateMarketEvent = (id: number, event: Omit<MarketEvent, 'id' | 'c
 export const deleteMarketEvent = (id: number) =>
   API.delete(`/market-events/${id}`);
 
+// ===== Earnings Calendar (美股财报日历) APIs =====
+
+export interface EarningsEntry {
+  id: number;
+  ticker: string;
+  name: string;
+  entryDate: string;   // "YYYY-MM-DD"
+  reportTime: string;  // 盘前 | 盘后 | 未公布
+  marketCap: string;   // "~210B"
+  marketCapRaw: number;
+  sp500: boolean;
+  sector: string;
+  epsForecast: string;
+  epsActual: string;
+  surprise: string;
+  numEstimates: number;
+  confirmed: boolean;
+  reported: boolean;
+}
+
+export interface EarningsCalendarData {
+  calendar: Record<string, EarningsEntry[]>;   // "YYYY-MM-DD" -> entries
+  monthsFetched: Record<string, string>;        // "YYYY-MM" -> ISO timestamp
+  watchlist: EarningsEntry[];
+}
+
+export const getEarningsCalendar = () =>
+  API.get<EarningsCalendarData>('/earnings-calendar/calendar');
+export const getEarningsNote = (ticker: string, date: string) =>
+  API.get<{ content: string }>('/earnings-calendar/notes', { params: { ticker, date } });
+export const saveEarningsNote = (ticker: string, date: string, content: string) =>
+  API.post('/earnings-calendar/notes', { ticker, date, content });
+
+/** SSE 拉取进度流的地址（通过 Vite 代理到后端）。 */
+export const earningsRefreshStreamUrl = (year: number, month: number) =>
+  `/api/earnings-calendar/refresh-stream?year=${year}&month=${month}`;
+
 // ===== Tech Cycle (技术周期) APIs =====
 export interface TechCycle {
   id: number;

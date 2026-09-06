@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useDarkMode } from './useDarkMode';
+import { ThemePicker } from './ThemePicker';
 import { type DocEditorHandle } from './DocEditor';
 import CategorySidebar from './CategorySidebar';
 import DocRow from './DocRow';
@@ -25,7 +25,6 @@ interface ResearchModuleProps {
 }
 
 export default function ResearchModule({ onGoHome, forceArchived }: ResearchModuleProps) {
-  const [darkMode, setDarkMode] = useDarkMode();
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
   const [reports, setReports] = useState<SectorReport[]>([]);
@@ -344,9 +343,7 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
           <h1 className="app-title">Sector Research</h1>
         </div>
         <div className="header-right">
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? 'LITE' : 'TERM'}
-          </button>
+          <ThemePicker />
         </div>
       </header>
 

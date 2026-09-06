@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useDarkMode } from './useDarkMode';
 import { PRESET_COLORS, MARKET_LABEL } from './constants';
 import {
   AddCategoryModal, EditCategoryModal, DeleteCategoryConfirmModal,
@@ -35,7 +34,6 @@ interface AppProps {
 function App({ onGoHome, forceArchived }: AppProps = {}) {
   const [stocks, setStocks] = useState<Stock[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [darkMode, setDarkMode] = useDarkMode();
 
   // Filter state
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<number>>(new Set());
@@ -328,7 +326,7 @@ function App({ onGoHome, forceArchived }: AppProps = {}) {
   return (
     <div className="app-container">
       {/* Header */}
-      <AppHeader onGoHome={onGoHome} darkMode={darkMode} onToggleDarkMode={() => setDarkMode(!darkMode)} />
+      <AppHeader onGoHome={onGoHome} />
 
       <main className="main-layout">
         {/* Sidebar */}

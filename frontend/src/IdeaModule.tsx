@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useDarkMode } from './useDarkMode';
+import { ThemePicker } from './ThemePicker';
 import { type DocEditorHandle } from './DocEditor';
 import CategorySidebar from './CategorySidebar';
 import DocRow from './DocRow';
@@ -25,7 +25,6 @@ interface IdeaModuleProps {
 }
 
 export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps) {
-  const [darkMode, setDarkMode] = useDarkMode();
   const [categories, setCategories] = useState<IdeaCategory[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(false);
@@ -428,9 +427,7 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
           <h1 className="app-title">Idea Vault</h1>
         </div>
         <div className="header-right">
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? 'LITE' : 'TERM'}
-          </button>
+          <ThemePicker />
         </div>
       </header>
 

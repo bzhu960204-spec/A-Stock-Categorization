@@ -1,10 +1,10 @@
+import { ThemePicker } from './ThemePicker';
+
 interface AppHeaderProps {
   onGoHome?: () => void;
-  darkMode: boolean;
-  onToggleDarkMode: () => void;
 }
 
-export function AppHeader({ onGoHome, darkMode, onToggleDarkMode }: Readonly<AppHeaderProps>) {
+export function AppHeader({ onGoHome }: Readonly<AppHeaderProps>) {
   return (
     <header className="glass-header">
       <div className="header-left">
@@ -14,9 +14,7 @@ export function AppHeader({ onGoHome, darkMode, onToggleDarkMode }: Readonly<App
         <h1 className="app-title">Stock Info</h1>
       </div>
       <div className="header-right">
-        <button type="button" className="icon-btn" onClick={onToggleDarkMode}>
-          {darkMode ? 'LITE' : 'TERM'}
-        </button>
+        <ThemePicker />
       </div>
     </header>
   );

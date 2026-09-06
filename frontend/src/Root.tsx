@@ -3,13 +3,14 @@ import App from './App';
 import HomePage from './HomePage';
 import ResearchModule from './ResearchModule';
 import CalendarModule from './CalendarModule';
+import EarningsCalendarModule from './EarningsCalendarModule';
 import TechCycleModule from './TechCycleModule';
 import IdeaModule from './IdeaModule';
 import TradeModule from './TradeModule';
 import ValuationModule from './ValuationModule';
 import ArchiveModule from './ArchiveModule';
 
-export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'techcycle' | 'ideas' | 'trades' | 'valuation' | 'archive';
+export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'earnings-calendar' | 'techcycle' | 'ideas' | 'trades' | 'valuation' | 'archive';
 
 export default function Root() {
   const [module, setModule] = useState<ModuleId>(() => {
@@ -29,6 +30,9 @@ export default function Root() {
   }
   if (module === 'calendar') {
     return <CalendarModule onGoHome={() => setModule('home')} />;
+  }
+  if (module === 'earnings-calendar') {
+    return <EarningsCalendarModule onGoHome={() => setModule('home')} />;
   }
   if (module === 'techcycle') {
     return <TechCycleModule onGoHome={() => setModule('home')} />;

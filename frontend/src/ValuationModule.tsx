@@ -1,4 +1,5 @@
 ﻿import { useState, useEffect, useRef } from 'react';
+import { ThemePicker } from './ThemePicker';
 import {
   getValuationSnapshots,
   getValuationCompanies,
@@ -89,7 +90,6 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function ValuationModule({ onGoHome }: Props) {
-  const [darkMode, setDarkMode] = useState(document.documentElement.getAttribute('data-theme') === 'dark');
   const [tab, setTab] = useState<TabId>('list');
   const [snapshots, setSnapshots] = useState<ValuationSnapshot[]>([]);
   const [companies, setCompanies] = useState<ValuationCompany[]>([]);
@@ -178,11 +178,6 @@ export default function ValuationModule({ onGoHome }: Props) {
     if (sortKey !== key) return <span className="val-sort-icon">⇅</span>;
     return <span className="val-sort-icon active">{sortDir === 'asc' ? '↑' : '↓'}</span>;
   }
-
-  // ── Dark mode sync ──────────────────────────────────────────────────────
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light');
-  }, [darkMode]);
 
   // ── Data loading ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -573,9 +568,7 @@ export default function ValuationModule({ onGoHome }: Props) {
           <button className="val-import-btn" onClick={openImport}>↑ 导入 JSON</button>
           <button className="val-import-btn" onClick={handleExportTemplate} title="导出包含所有公司的空白模板，填入最新数据后再导入">↓ 导出模板</button>
           <button className="confirm-btn" onClick={openAdd}>+ 添加快照</button>
-          <button className="icon-btn" onClick={() => setDarkMode(!darkMode)}>
-            {darkMode ? 'LITE' : 'TERM'}
-          </button>
+          <ThemePicker />
         </div>
       </header>
 
