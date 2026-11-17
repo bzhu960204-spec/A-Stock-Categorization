@@ -5,6 +5,8 @@ import com.stockcard.entity.IdeaAttachment;
 import com.stockcard.entity.IdeaCategory;
 import com.stockcard.entity.IdeaComment;
 import com.stockcard.service.IdeaService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +34,7 @@ public class IdeaController {
     @Data
     @NoArgsConstructor
     static class CategoryPayload {
+        @Size(max = 100)
         private String name;
     }
 
@@ -39,7 +42,9 @@ public class IdeaController {
     @NoArgsConstructor
     static class IdeaPayload {
         private Long categoryId;
+        @Size(max = 100)
         private String subCategory;
+        @Size(max = 200)
         private String title;
         private String content;
         private Integer rating;
@@ -84,7 +89,7 @@ public class IdeaController {
     }
 
     @PostMapping("/categories")
-    public ResponseEntity<IdeaCategory> createCategory(@RequestBody CategoryPayload payload) {
+    public ResponseEntity<IdeaCategory> createCategory(@Valid @RequestBody CategoryPayload payload) {
         if (payload.getName() == null || payload.getName().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -94,7 +99,7 @@ public class IdeaController {
     }
 
     @PutMapping("/categories/{id}")
-    public ResponseEntity<IdeaCategory> updateCategory(@PathVariable Long id, @RequestBody CategoryPayload payload) {
+    public ResponseEntity<IdeaCategory> updateCategory(@PathVariable Long id, @Valid @RequestBody CategoryPayload payload) {
         return ideaService.updateCategory(id, payload.getName())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -132,13 +137,12 @@ public class IdeaController {
 
     @GetMapping("/search")
     public List<IdeaDto> search(@RequestParam String keyword) {
-        String kw = keyword.trim().toLowerCase();
-        if (kw.isEmpty()) return List.of();
-        return ideaService.search("%" + kw + "%").stream().map(IdeaDto::from).collect(Collectors.toList());
+        if (keyword.isBlank()) return List.of();
+        return ideaService.search(keyword).stream().map(IdeaDto::from).collect(Collectors.toList());
     }
 
     @PostMapping
-    public ResponseEntity<IdeaDto> createIdea(@RequestBody IdeaPayload payload) {
+    public ResponseEntity<IdeaDto> createIdea(@Valid @RequestBody IdeaPayload payload) {
         if (payload.getTitle() == null || payload.getTitle().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -148,7 +152,7 @@ public class IdeaController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<IdeaDto> updateIdea(@PathVariable Long id, @RequestBody IdeaPayload payload) {
+    public ResponseEntity<IdeaDto> updateIdea(@PathVariable Long id, @Valid @RequestBody IdeaPayload payload) {
         return ideaService.update(id, payload.getTitle(), payload.getContent(),
                         payload.getSubCategory(), payload.getRating(), payload.getCategoryId())
                 .map(idea -> ResponseEntity.ok(IdeaDto.from(idea)))

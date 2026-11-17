@@ -66,8 +66,8 @@ public class TradeService {
         return tradeRepository.findAllByOrderByCreatedAtDesc();
     }
 
-    public List<Trade> search(String pattern) {
-        return tradeRepository.searchByKeyword(pattern);
+    public List<Trade> search(String keyword) {
+        return tradeRepository.searchByKeyword(SearchPatterns.contains(keyword));
     }
 
     public Trade create(String title, String content, String subCategory, Integer rating, Long categoryId) {

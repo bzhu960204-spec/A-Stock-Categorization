@@ -1,6 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { marked } from 'marked';
-import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
+import { markdownToHtml } from './shared/markdown';
+import { useEditor, EditorContent, ReactNodeViewRenderer, NodeViewWrapper, type NodeViewProps } from '@tiptap/react';
 import { InputRule } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -12,7 +12,7 @@ import katex from 'katex';
 import 'katex/dist/katex.min.css';
 
 // ── Resizable Image NodeView ──────────────────────────────────────────────────
-function ResizableImageView({ node, updateAttributes, editor }: any) {
+function ResizableImageView({ node, updateAttributes, editor }: NodeViewProps) {
   const imgRef = useRef<HTMLImageElement>(null);
   const drag = useRef({ startX: 0, startW: 0 });
 
@@ -263,7 +263,7 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
 
           const renderMarkdown = () => {
             event.preventDefault();
-            editor?.commands.insertContent(marked.parse(plain) as string);
+            editor?.commands.insertContent(markdownToHtml(plain));
             suppressSyncRef.current = true;
             onChange(editor?.getHTML() ?? '');
             requestAnimationFrame(() => { suppressSyncRef.current = false; });

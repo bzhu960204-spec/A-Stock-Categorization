@@ -39,7 +39,7 @@ public interface StockRepository extends JpaRepository<Stock, Long> {
            "LOWER(code) LIKE :kw OR LOWER(name) LIKE :kw OR LOWER(notes) LIKE :kw OR " +
            "LOWER(recommender) LIKE :kw OR LOWER(business) LIKE :kw OR LOWER(customers) LIKE :kw OR " +
            "LOWER(competitors) LIKE :kw OR LOWER(strengths) LIKE :kw OR LOWER(structural_weaknesses) LIKE :kw OR " +
-           "LOWER(future) LIKE :kw OR LOWER(founder_ceo_holding) LIKE :kw OR id IN (:ids)) " +
+           "LOWER(future) LIKE :kw OR LOWER(founder_ceo_holding) LIKE :kw OR LOWER(industry_position) LIKE :kw OR id IN (:ids)) " +
            "ORDER BY id", nativeQuery = true)
     List<Stock> searchByFieldsOrIds(@Param("kw") String kw, @Param("ids") Set<Long> ids);
 }

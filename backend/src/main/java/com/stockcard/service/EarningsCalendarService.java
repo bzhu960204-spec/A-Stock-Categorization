@@ -1,5 +1,8 @@
 package com.stockcard.service;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stockcard.entity.EarningsCalendarEntry;
@@ -20,7 +23,7 @@ import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.logging.Logger;
+
 
 /**
  * 美股财报日历服务：从 Nasdaq 官方 API 按月拉取财报，过滤大盘股，
@@ -31,7 +34,7 @@ import java.util.logging.Logger;
 @RequiredArgsConstructor
 public class EarningsCalendarService {
 
-    private static final Logger logger = Logger.getLogger(EarningsCalendarService.class.getName());
+    private static final Logger logger = LoggerFactory.getLogger(EarningsCalendarService.class);
 
     private final EarningsCalendarEntryRepository entryRepo;
     private final EarningsMonthFetchRepository monthRepo;
@@ -78,7 +81,7 @@ public class EarningsCalendarService {
 
         int total = tradingDays.size();
         int totalFound = 0;
-        logger.info("[earnings] 拉取 " + monthKey + "，共 " + total + " 个交易日...");
+        logger.info("[earnings] 拉取 {}，共 {} 个交易日...", monthKey, total);
         emit.accept(Map.of("status", "start", "total", total, "processed", 0));
 
         int processed = 0;
@@ -112,7 +115,7 @@ public class EarningsCalendarService {
         mf.setFetchedAt(LocalDateTime.now());
         monthRepo.save(mf);
 
-        logger.info("[earnings] " + monthKey + " 完成，共 " + totalFound + " 家大盘股财报");
+        logger.info("[earnings] {} 完成，共 {} 家大盘股财报", monthKey, totalFound);
 
         Map<String, Object> done = new HashMap<>();
         done.put("status", "done");
@@ -180,14 +183,14 @@ public class EarningsCalendarService {
                 } else if (resp.statusCode() == 429) {
                     Thread.sleep(3000L * (attempt + 1));
                 } else {
-                    logger.warning("[earnings] " + dateStr + " 状态码 " + resp.statusCode());
+                    logger.warn("[earnings] {} 状态码 {}", dateStr, resp.statusCode());
                     return null;
                 }
             } catch (InterruptedException ie) {
                 Thread.currentThread().interrupt();
                 return null;
             } catch (Exception ex) {
-                logger.warning("[earnings] " + dateStr + " 请求失败: " + ex.getMessage());
+                logger.warn("[earnings] {} 请求失败: {}", dateStr, ex.toString());
                 try {
                     Thread.sleep(2000L * (attempt + 1));
                 } catch (InterruptedException ie) {

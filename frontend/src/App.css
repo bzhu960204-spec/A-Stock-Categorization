@@ -1,4 +1,4 @@
-﻿/* ===== Theme Palettes ===== */
+/* ===== Theme Palettes ===== */
 
 [data-theme="light"] {
   --bg: #f0ede5;
@@ -2215,54 +2215,6 @@ body {
   gap: 8px;
   overflow: hidden;
   min-height: 0;
-}
-
-/* MDEditor container */
-.doc-mde-wrap {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  border-radius: 6px;
-}
-.doc-mde-wrap .w-md-editor {
-  background: var(--panel-bg-2) !important;
-  border: 1px solid var(--border) !important;
-  border-radius: 6px !important;
-  box-shadow: none !important;
-}
-.doc-mde-wrap .w-md-editor-toolbar {
-  background: var(--panel-bg) !important;
-  border-bottom: 1px solid var(--border) !important;
-  border-radius: 6px 6px 0 0 !important;
-}
-.doc-mde-wrap .w-md-editor-toolbar li > button {
-  color: var(--text-secondary) !important;
-}
-.doc-mde-wrap .w-md-editor-toolbar li > button:hover {
-  color: var(--text-primary) !important;
-  background: var(--hover-bg) !important;
-}
-.doc-mde-wrap .w-md-editor-content {
-  background: var(--panel-bg-2) !important;
-}
-.doc-mde-wrap .w-md-editor-text-pre > code,
-.doc-mde-wrap .w-md-editor-text-input,
-.doc-mde-wrap .w-md-editor-text {
-  font-family: 'JetBrains Mono', monospace !important;
-  font-size: 0.85rem !important;
-}
-/* preview pane inside editor */
-.doc-mde-wrap .wmde-markdown {
-  background: transparent !important;
-  font-size: 0.9rem !important;
-}
-.doc-mde-preview-only {
-  padding: 4px 0;
-}
-.doc-mde-preview-only .wmde-markdown {
-  background: transparent !important;
-  color: var(--text-secondary) !important;
-  font-size: 0.9rem !important;
 }
 
 .doc-compose-title-input {

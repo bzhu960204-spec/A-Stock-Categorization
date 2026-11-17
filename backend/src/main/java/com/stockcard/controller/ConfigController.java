@@ -1,8 +1,6 @@
 package com.stockcard.controller;
 
-import com.stockcard.entity.AppSetting;
-import com.stockcard.repository.AppSettingRepository;
-import org.springframework.beans.factory.annotation.Value;
+import com.stockcard.service.AppConfigService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -12,49 +10,29 @@ import java.util.Map;
 @RequestMapping("/api/config")
 public class ConfigController {
 
-    private static final String KEY_TWELVEDATA = "twelvedata.api-key";
+    private final AppConfigService appConfigService;
 
-    private final AppSettingRepository settingRepo;
-
-    @Value("${app.twelvedata.api-key:}")
-    private String defaultTwelveDataApiKey;
-
-    public ConfigController(AppSettingRepository settingRepo) {
-        this.settingRepo = settingRepo;
+    public ConfigController(AppConfigService appConfigService) {
+        this.appConfigService = appConfigService;
     }
 
-    /** GET /api/config  — returns current config (keys masked for display) */
+    /** GET /api/config — never returns secrets in plain text, only a masked preview and where the value comes from. */
     @GetMapping
-    public ResponseEntity<Map<String, String>> getConfig() {
-        String tdKey = resolveTwelveDataApiKey();
-        String tdMasked = tdKey.isBlank() ? "" : tdKey.substring(0, Math.min(4, tdKey.length())) + "****";
+    public ResponseEntity<Map<String, Object>> getConfig() {
+        String tdKey = appConfigService.resolveTwelveDataApiKey();
         return ResponseEntity.ok(Map.of(
-                "twelvedataApiKey", tdKey,
-                "twelvedataApiKeyMasked", tdMasked
+                "twelvedataApiKeyConfigured", !tdKey.isBlank(),
+                "twelvedataApiKeyMasked", AppConfigService.mask(tdKey),
+                "twelvedataApiKeySource", appConfigService.twelveDataApiKeySource().name()
         ));
     }
 
-    /** PUT /api/config  — saves config to DB */
+    /** PUT /api/config — saves config to DB; an empty key clears the saved value (falls back to the environment). */
     @PutMapping
     public ResponseEntity<Map<String, String>> saveConfig(@RequestBody Map<String, String> body) {
         if (body.containsKey("twelvedataApiKey")) {
-            String newKey = body.getOrDefault("twelvedataApiKey", "").trim();
-            settingRepo.save(new AppSetting(KEY_TWELVEDATA, newKey));
+            appConfigService.saveTwelveDataApiKey(body.get("twelvedataApiKey"));
         }
         return ResponseEntity.ok(Map.of("status", "ok"));
     }
-
-    /** Used by other controllers to read the effective Twelve Data API key */
-    public String resolveTwelveDataApiKey() {
-        return settingRepo.findById(KEY_TWELVEDATA)
-                .map(AppSetting::getValue)
-                .filter(v -> v != null && !v.isBlank())
-                .orElse(defaultTwelveDataApiKey);
-    }
-
-    /** Alias for backward compat */
-    public String resolveApiKey() {
-        return resolveTwelveDataApiKey();
-    }
-
 }

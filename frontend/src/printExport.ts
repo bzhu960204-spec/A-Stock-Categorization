@@ -1,13 +1,11 @@
-import { marked } from 'marked';
-import { autoFenceBoxArt } from './markdownUtils';
+import { autoFenceBoxArt, renderMarkdownSafe } from './shared/markdown';
 import type { Stock, IndustryChain } from './api';
 
 /** Build the standalone printable HTML document for a stock's industry chains. */
 export function buildChainsPrintHtml(stock: Stock, chains: IndustryChain[]): string {
   const stockLabel = `${stock.name}（${stock.code}）`;
   const chainHtmlBlocks = chains.map(chain => {
-    const md = autoFenceBoxArt(chain.content);
-    const html = marked.parse(md) as string;
+    const html = renderMarkdownSafe(autoFenceBoxArt(chain.content));
     return `<section class="chain-section">
   <h2 class="chain-title">${chain.title}</h2>
   <div class="chain-body">${html}</div>
@@ -121,7 +119,7 @@ export function printDocument(opts: {
   ${opts.stars ? `<div class="doc-stars">${opts.stars}</div>` : ''}
   <div class="doc-meta">${meta}</div>
   <div class="doc-content">${opts.contentHtml || '<p>（无内容）</p>'}</div>
-  <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };<\/script>
+  <script>window.onload = () => { window.print(); window.onafterprint = () => window.close(); };</script>
 </body>
 </html>`;
   const win = window.open('', '_blank', 'width=900,height=700');

@@ -17,7 +17,6 @@ import {
   getIdeaComments, createIdeaComment, updateIdeaComment, deleteIdeaComment,
   type IdeaCategory, type Idea, type IdeaAttachment, type IdeaComment,
 } from './api';
-import './App.css';
 
 interface IdeaModuleProps {
   onGoHome: () => void;
@@ -27,11 +26,11 @@ interface IdeaModuleProps {
 export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps) {
   const [categories, setCategories] = useState<IdeaCategory[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Archive view
   const [archivedIdeas, setArchivedIdeas] = useState<Idea[]>([]);
-  const [loadingArchived, setLoadingArchived] = useState(false);
+  const [loadingArchived, setLoadingArchived] = useState(!!forceArchived);
 
   // Sidebar filter: null = all, number = category id
   const [filter, setFilter] = useState<null | number>(null);
@@ -77,6 +76,13 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
   const [comments, setComments] = useState<IdeaComment[]>([]);
 
 
+  // ── Modal close ───────────────────────────────────────────────────────────
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    setModalIdea(null);
+    setSaveError('');
+  }, []);
+
   // ── ESC closes modal (blocked in edit mode to prevent data loss) ──────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -84,34 +90,44 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [modalOpen, modalMode]);
+  }, [modalOpen, modalMode, closeModal]);
 
   // ── Load categories ───────────────────────────────────────────────────────
-  const loadCategories = useCallback(async () => {
-    const res = await getIdeaCategories();
-    setCategories(res.data);
-  }, []);
+  const loadCategories = useCallback(() =>
+    getIdeaCategories().then(res => { setCategories(res.data); }), []);
   useEffect(() => { loadCategories(); }, [loadCategories]);
 
   // ── Load ideas ────────────────────────────────────────────────────────────
-  const loadIdeas = useCallback(async () => {
-    setLoading(true);
-    setSubCategoryFilter('全部'); // reset sub-filter when folder changes
-    try {
-      const res = typeof filter === 'number'
-        ? await getIdeas({ categoryId: filter })
-        : await getIdeas();
-      setIdeas(res.data);
-    } finally {
-      setLoading(false);
-    }
+  const requestIdeas = useCallback(() => {
+    const request = typeof filter === 'number'
+      ? getIdeas({ categoryId: filter })
+      : getIdeas();
+    return request
+      .then(res => { setIdeas(res.data); })
+      .finally(() => { setLoading(false); });
   }, [filter]);
-  useEffect(() => { loadIdeas(); }, [loadIdeas]);
+
+  const loadIdeas = useCallback(() => {
+    setLoading(true);
+    setSubCategoryFilter('全部');
+    return requestIdeas();
+  }, [requestIdeas]);
+
+  // Reset sub-filter and show loading when the folder changes (adjusting state during render).
+  const [prevFilter, setPrevFilter] = useState(filter);
+  if (filter !== prevFilter) {
+    setPrevFilter(filter);
+    setLoading(true);
+    setSubCategoryFilter('全部');
+  }
+  useEffect(() => { requestIdeas(); }, [requestIdeas]);
 
   // ── Debounced global search ───────────────────────────────────────────────
+  // Clear results while the search box is empty (adjusting state during render).
+  if (!search.trim() && searchResults.length > 0) setSearchResults([]);
   useEffect(() => {
     const kw = search.trim();
-    if (!kw) { setSearchResults([]); return; }
+    if (!kw) return;
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
@@ -165,12 +181,6 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
   };
 
   // ── Modal ─────────────────────────────────────────────────────────────────
-  const closeModal = () => {
-    setModalOpen(false);
-    setModalIdea(null);
-    setSaveError('');
-  };
-
   const openReadModal = (idea: Idea) => {
     setModalIdea(idea);
     setModalMode('read');
@@ -259,17 +269,23 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
     if (modalIdea?.id === idea.id) closeModal();
   };
 
-  const loadArchived = useCallback(async () => {
-    setLoadingArchived(true);
-    try {
-      const res = await getArchivedIdeas();
-      setArchivedIdeas(res.data);
-    } finally {
-      setLoadingArchived(false);
-    }
-  }, []);
+  const requestArchived = useCallback(() =>
+    getArchivedIdeas()
+      .then(res => { setArchivedIdeas(res.data); })
+      .finally(() => { setLoadingArchived(false); }), []);
 
-  useEffect(() => { if (forceArchived) loadArchived(); }, [forceArchived, loadArchived]);
+  const loadArchived = useCallback(() => {
+    setLoadingArchived(true);
+    return requestArchived();
+  }, [requestArchived]);
+
+  // Show loading as soon as the archive view is entered (adjusting state during render).
+  const [prevForceArchived, setPrevForceArchived] = useState(forceArchived);
+  if (forceArchived !== prevForceArchived) {
+    setPrevForceArchived(forceArchived);
+    if (forceArchived) setLoadingArchived(true);
+  }
+  useEffect(() => { if (forceArchived) requestArchived(); }, [forceArchived, requestArchived]);
 
   const handleArchiveIdea = async (idea: Idea, e?: React.MouseEvent) => {
     e?.stopPropagation();

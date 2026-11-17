@@ -5,8 +5,41 @@
 ## 技术栈
 
 - **后端**: Spring Boot 3.2.5 + JPA/H2 + REST API
-- **前端**: React 18 + TypeScript + Vite
+- **前端**: React 19 + TypeScript + Vite
 - **富文本编辑器**: Tiptap (Notion 级别的所见即所得编辑器)
+
+## 配置与启动
+
+1. 复制 `.env.example` 为 `.env`，按需填入 `TWELVEDATA_API_KEY`、`EASTMONEY_TOKEN` 等（`.env` 已被 git 忽略，**切勿提交密钥**）。后端启动时会自动读取根目录 `.env`。
+2. 开发模式：`start-dev.cmd`（启用 `dev` profile，H2 Console 位于 `/h2-console`）。
+3. 生产模式：`build-prod.cmd` 构建后运行 `start-prod.cmd`（单端口，H2 Console 关闭）。
+4. 默认只监听本机 `127.0.0.1`。应用没有登录认证，如确需让局域网其他设备访问，可给启动脚本加 `-Lan` 参数。
+
+## 测试
+
+```bash
+cd backend && mvn test        # 后端（JUnit 5，使用内存 H2，不会影响 ./data）
+cd frontend && npm test       # 前端（Vitest）
+cd frontend && npm run lint   # ESLint
+```
+
+推送或提 PR 时 GitHub Actions（`.github/workflows/ci.yml`）会自动运行以上检查。
+
+## 数据备份与恢复
+
+- **自动备份**：应用运行时每小时检查一次，若最近一次备份已超过 24 小时，则通过 H2 `BACKUP TO` 在线生成一致性备份到 `backend/data/backups/stockdb-<时间>.zip`，保留最近 14 份（见 `application.properties` 中的 `app.backup.*`）。
+- **手动备份**：运行 `backup-db.cmd`。应用运行中会调用 `POST /api/admin/backups` 在线备份；应用未运行时直接打包数据库文件。
+- **恢复**：先停止应用，把 zip 中的 `stockdb.mv.db` 解压覆盖到 `backend/data/`，再启动。
+
+## 数据库结构变更（Flyway）
+
+表结构由 Flyway 管理（`backend/src/main/resources/db/migration`），Hibernate 只做校验（`ddl-auto=validate`）。
+
+- **修改实体（新增/修改字段或表）时**，必须新增一个迁移脚本，例如 `V3__add_stock_tags.sql`，否则启动会因 schema 校验失败而退出。
+- **已发布的迁移脚本不要修改**，有问题就再加一个新版本修正。
+- 引入 Flyway 之前创建的旧库，首次启动时会自动标记为 V1（不会重新执行 `V1__baseline.sql`），然后继续执行后续迁移。
+
+改进计划与进度见 [docs/project-improvement](docs/project-improvement/project-improvement-plan.md)。
 
 ---
 

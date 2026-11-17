@@ -1,5 +1,5 @@
 ﻿import { useState, useEffect, useRef } from 'react';
-import { ThemePicker } from './ThemePicker';
+import { ThemePicker } from '../../ThemePicker';
 import {
   getValuationSnapshots,
   getValuationCompanies,
@@ -8,7 +8,7 @@ import {
   deleteValuationSnapshot,
   type ValuationSnapshot,
   type ValuationCompany,
-} from './api';
+} from '../../api';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 

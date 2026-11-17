@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
-import { autoFenceBoxArt } from './markdownUtils';
+import { autoFenceBoxArt } from './shared/markdown';
+import { MarkdownView } from './shared/MarkdownView';
 import { buildChainsPrintHtml } from './printExport';
 import { useEscapeKey } from './useEscapeKey';
 import {
@@ -30,16 +28,26 @@ export function IndustryChainModal({ stock, open, onClose }: IndustryChainModalP
   const [chainJsonError, setChainJsonError] = useState('');
   const [importingChains, setImportingChains] = useState(false);
 
+  // Reset view state each time the modal opens (adjusting state during render).
+  const [prevOpen, setPrevOpen] = useState(false);
+  const [prevStockId, setPrevStockId] = useState(stock.id);
+  if (open !== prevOpen || stock.id !== prevStockId) {
+    setPrevOpen(open);
+    setPrevStockId(stock.id);
+    if (open) {
+      setChainFormMode('none');
+      setEditingChain(null);
+      setViewingChain(null);
+      setPendingDeleteChain(null);
+      setChainJsonText('');
+      setChainJsonError('');
+      setLoadingChains(true);
+    }
+  }
+
   // Load chains each time the modal opens.
   useEffect(() => {
     if (!open) return;
-    setChainFormMode('none');
-    setEditingChain(null);
-    setViewingChain(null);
-    setPendingDeleteChain(null);
-    setChainJsonText('');
-    setChainJsonError('');
-    setLoadingChains(true);
     getIndustryChains(stock.id)
       .then(res => setIndustryChains(res.data))
       .finally(() => setLoadingChains(false));
@@ -226,9 +234,7 @@ export function IndustryChainModal({ stock, open, onClose }: IndustryChainModalP
 
           {/* Read view */}
           {viewingChain && chainFormMode === 'none' && (
-            <div className="chain-item-content chain-read-view">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{autoFenceBoxArt(viewingChain.content)}</ReactMarkdown>
-            </div>
+            <MarkdownView className="chain-item-content chain-read-view" markdown={autoFenceBoxArt(viewingChain.content)} />
           )}
 
           {/* Add / Edit form */}

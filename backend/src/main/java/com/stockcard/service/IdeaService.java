@@ -126,8 +126,8 @@ public class IdeaService {
         });
     }
 
-    public List<Idea> search(String pattern) {
-        return ideaRepository.searchByKeyword(pattern);
+    public List<Idea> search(String keyword) {
+        return ideaRepository.searchByKeyword(SearchPatterns.contains(keyword));
     }
 
     public Idea create(String title, String content, String subCategory, Integer rating, Long categoryId) {

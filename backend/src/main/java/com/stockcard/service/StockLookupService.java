@@ -1,7 +1,7 @@
 package com.stockcard.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.stockcard.controller.ConfigController;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -10,34 +10,25 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.X509TrustManager;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.security.SecureRandom;
-import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 /** External stock-code lookup across EastMoney (A股), SEC/Yahoo (US), and Twelve Data (global). */
 @Service
 public class StockLookupService {
 
-    private static final Logger logger = Logger.getLogger(StockLookupService.class.getName());
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final Logger logger = LoggerFactory.getLogger(StockLookupService.class);
+    private static final Map<String, String> LOOKUP_FAILED = Map.of("code", "", "name", "", "error", "查询失败，请稍后重试");
+    private final RestTemplate restTemplate;
 
-    @Value("${app.eastmoney.token:D43BF722C8E33BDC906FB84D85E326E8}")
+    @Value("${app.eastmoney.token:}")
     private String eastMoneyToken;
     private static final String SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
     private static final long SEC_CACHE_TTL_MS = TimeUnit.HOURS.toMillis(12);
@@ -51,35 +42,26 @@ public class StockLookupService {
         "HK", "HKEX"
     );
 
-    private final ConfigController configController;
+    private final AppConfigService appConfigService;
 
-    public StockLookupService(ConfigController configController) {
-        this.configController = configController;
-    }
-
-    /** Fetches a URL with SSL verification disabled (for APIs with cert issues on the JVM trust store). */
-    private Map<?, ?> fetchJsonSkipSsl(String url) throws Exception {
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-        sslContext.init(null, new TrustManager[]{
-            new X509TrustManager() {
-                public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
-                public void checkClientTrusted(X509Certificate[] c, String a) {}
-                public void checkServerTrusted(X509Certificate[] c, String a) {}
-            }
-        }, new SecureRandom());
-        HttpClient client = HttpClient.newBuilder().sslContext(sslContext).build();
-        HttpRequest request = HttpRequest.newBuilder().uri(URI.create(url)).GET().build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        return objectMapper.readValue(response.body(), Map.class);
+    public StockLookupService(AppConfigService appConfigService, RestTemplate externalRestTemplate) {
+        this.appConfigService = appConfigService;
+        this.restTemplate = externalRestTemplate;
     }
 
     // ─────────────── A股 (EastMoney) ───────────────
 
+    /** URI (not String) so RestTemplate doesn't treat it as a template and re-encode the already-encoded query. */
+    private Map<?, ?> fetchEastMoney(String keyword, int count) {
+        String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
+        String url = "https://searchapi.eastmoney.com/api/suggest/get?input=" + encodedKeyword
+                + "&type=14&token=" + URLEncoder.encode(eastMoneyToken, StandardCharsets.UTF_8) + "&count=" + count;
+        return restTemplate.getForObject(URI.create(url), Map.class);
+    }
+
     public Map<String, String> lookup(String keyword) {
         try {
-            String encodedKeyword = URLEncoder.encode(keyword, StandardCharsets.UTF_8);
-            String url = "https://searchapi.eastmoney.com/api/suggest/get?input=" + encodedKeyword + "&type=14&token=" + eastMoneyToken + "&count=1";
-            Map<?, ?> response = restTemplate.getForObject(url, Map.class);
+            Map<?, ?> response = fetchEastMoney(keyword, 1);
 
             List<Map<String, String>> suggestions = extractEastMoneySuggestions(response);
             if (!suggestions.isEmpty()) {
@@ -87,7 +69,8 @@ public class StockLookupService {
             }
             return Map.of("code", "", "name", "", "error", "未找到");
         } catch (Exception e) {
-            return Map.of("code", "", "name", "", "error", "查询失败: " + e.getMessage());
+            logger.warn("EastMoney lookup failed: {}", e.toString());
+            return LOOKUP_FAILED;
         }
     }
 
@@ -97,11 +80,10 @@ public class StockLookupService {
                 return List.of();
             }
             int safeLimit = Math.min(Math.max(limit, 1), 20);
-            String encodedKeyword = URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8);
-            String url = "https://searchapi.eastmoney.com/api/suggest/get?input=" + encodedKeyword + "&type=14&token=" + eastMoneyToken + "&count=" + safeLimit;
-            Map<?, ?> response = restTemplate.getForObject(url, Map.class);
+            Map<?, ?> response = fetchEastMoney(keyword.trim(), safeLimit);
             return extractEastMoneySuggestions(response);
         } catch (Exception e) {
+            logger.warn("EastMoney suggest failed: {}", e.toString());
             return List.of();
         }
     }
@@ -129,7 +111,8 @@ public class StockLookupService {
 
             return Map.of("code", "", "name", "", "error", "未找到");
         } catch (Exception e) {
-            return Map.of("code", "", "name", "", "error", "查询失败: " + e.getMessage());
+            logger.warn("SEC lookup failed: {}", e.toString());
+            return LOOKUP_FAILED;
         }
     }
 
@@ -215,7 +198,7 @@ public class StockLookupService {
 
                 Map<?, ?> body = response.getBody();
                 if (body == null || body.isEmpty()) {
-                    logger.warning("SEC tickers response is empty");
+                    logger.warn("SEC tickers response is empty");
                     return secTickerCache;
                 }
 
@@ -236,9 +219,9 @@ public class StockLookupService {
                 parsed.sort(Comparator.comparing(m -> m.get("code")));
                 secTickerCache = parsed;
                 secTickerCacheAtMs = System.currentTimeMillis();
-                logger.info("Loaded SEC ticker cache: " + parsed.size() + " entries");
+                logger.info("Loaded SEC ticker cache: {} entries", parsed.size());
             } catch (Exception e) {
-                logger.warning("SEC ticker fallback unavailable: " + e.getMessage());
+                logger.warn("SEC ticker fallback unavailable: {}", e.toString());
             }
         }
 
@@ -301,7 +284,7 @@ public class StockLookupService {
             String marketUpper = market == null ? "" : market.toUpperCase(Locale.ROOT);
 
             // Try Twelve Data first if API key is configured
-            String twelveDataApiKey = configController.resolveApiKey();
+            String twelveDataApiKey = appConfigService.resolveTwelveDataApiKey();
             if (twelveDataApiKey != null && !twelveDataApiKey.isBlank()) {
                 String exchange = MARKET_TO_EXCHANGE.get(marketUpper);
                 if (exchange != null) {
@@ -309,22 +292,26 @@ public class StockLookupService {
                         String encoded = URLEncoder.encode(kw, StandardCharsets.UTF_8);
                         String url = "https://api.twelvedata.com/symbol_search?symbol=" + encoded
                                 + "&exchange=" + exchange
-                                + "&outputsize=" + safeLimit
-                                + "&apikey=" + twelveDataApiKey;
-                        Map<?, ?> response = fetchJsonSkipSsl(url);
+                                + "&outputsize=" + safeLimit;
+                        // Key goes in a header (not the URL) so it can never show up in exception messages / logs.
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.set(HttpHeaders.AUTHORIZATION, "apikey " + twelveDataApiKey);
+                        // URI (not String) so RestTemplate doesn't re-encode the already-encoded query.
+                        Map<?, ?> response = restTemplate.exchange(
+                                URI.create(url), HttpMethod.GET, new HttpEntity<>(headers), Map.class).getBody();
                         List<Map<String, String>> tdResults = parseTwelveDataResult(response, safeLimit);
                         if (!tdResults.isEmpty()) {
                             return tdResults;
                         }
                     } catch (Exception e) {
-                        logger.warning("Twelve Data global suggest failed: " + e.getMessage());
+                        logger.warn("Twelve Data global suggest failed: {}", e.toString());
                     }
                 }
             }
 
             return List.of();
         } catch (Exception e) {
-            logger.warning("Global suggest failed: " + e.getMessage());
+            logger.warn("Global suggest failed: {}", e.toString());
             return List.of();
         }
     }
@@ -337,7 +324,8 @@ public class StockLookupService {
             }
             return Map.of("code", "", "name", "", "error", "未找到");
         } catch (Exception e) {
-            return Map.of("code", "", "name", "", "error", "查询失败: " + e.getMessage());
+            logger.warn("Global lookup failed: {}", e.toString());
+            return LOOKUP_FAILED;
         }
     }
 

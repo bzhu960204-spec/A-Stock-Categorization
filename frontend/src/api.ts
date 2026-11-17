@@ -494,8 +494,10 @@ export const deleteValuationSnapshot = (id: number) =>
 
 // ===== Config APIs =====
 export interface AppConfig {
-  twelvedataApiKey: string;
+  twelvedataApiKeyConfigured: boolean;
   twelvedataApiKeyMasked: string;
+  /** DATABASE = saved from the UI, ENVIRONMENT = from .env / env vars, NONE = not configured */
+  twelvedataApiKeySource: 'DATABASE' | 'ENVIRONMENT' | 'NONE';
 }
 export const getConfig = () => API.get<AppConfig>('/config');
 export const saveConfig = (config: { twelvedataApiKey?: string }) =>

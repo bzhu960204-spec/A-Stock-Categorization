@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { marked } from 'marked';
+import { toEditorHtml } from './shared/markdown';
 import { DocEditor } from './DocEditor';
 import { useEscapeKey } from './useEscapeKey';
 import {
@@ -122,10 +122,8 @@ function NoteModal({ ticker, date, onClose }: NoteModalProps) {
     getEarningsNote(ticker, date)
       .then(res => {
         if (!alive) return;
-        const raw = res.data.content || '';
         // 兼容旧的 Markdown 笔记：非 HTML 内容先转成 HTML 再交给富文本编辑器。
-        const html = raw && !/^\s*</.test(raw) ? (marked.parse(raw) as string) : raw;
-        setContent(html);
+        setContent(toEditorHtml(res.data.content || ''));
       })
       .catch(() => { /* 无笔记视为空 */ })
       .finally(() => { if (alive) setLoading(false); });
@@ -200,39 +198,49 @@ export default function EarningsCalendarModule({ onGoHome }: EarningsCalendarMod
   const [fetching, setFetching] = useState(false);
   const [note, setNote] = useState<{ ticker: string; date: string } | null>(null);
 
-  const loadCalendar = useCallback(async () => {
+  // `data`/`error` and `loading` are updated in the same callback so the auto-select below sees fresh data.
+  const requestCalendar = useCallback(() =>
+    getEarningsCalendar().then(
+      res => {
+        setData({
+          calendar: res.data.calendar || {},
+          monthsFetched: res.data.monthsFetched || {},
+          watchlist: res.data.watchlist || [],
+        });
+        setLoading(false);
+      },
+      err => {
+        setError(getErrorMessage(err, '加载失败'));
+        setLoading(false);
+      },
+    ), []);
+
+  const loadCalendar = () => {
     setLoading(true);
     setError('');
-    try {
-      const res = await getEarningsCalendar();
-      setData({
-        calendar: res.data.calendar || {},
-        monthsFetched: res.data.monthsFetched || {},
-        watchlist: res.data.watchlist || [],
-      });
-    } catch (err) {
-      setError(getErrorMessage(err, '加载失败'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    requestCalendar();
+  };
 
-  useEffect(() => { loadCalendar(); }, [loadCalendar]);
+  // Initial load: `loading` starts as true and `error` as '', so no reset is needed here.
+  useEffect(() => { requestCalendar(); }, [requestCalendar]);
 
   // 首次加载后自动选中今天或之后最近有数据的日期（限当月）
-  useEffect(() => {
-    if (loading) return;
-    const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate());
-    const dates = Object.keys(data.calendar).sort();
-    const nearest = dates.find(d => d >= todayStr);
-    if (nearest) {
-      const d = new Date(nearest + 'T00:00:00');
-      if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
-        setSelectedDate(nearest);
+  // Runs whenever `loading` flips (adjusting state during render).
+  const [prevLoading, setPrevLoading] = useState(loading);
+  if (loading !== prevLoading) {
+    setPrevLoading(loading);
+    if (!loading) {
+      const todayStr = toDateStr(today.getFullYear(), today.getMonth(), today.getDate());
+      const dates = Object.keys(data.calendar).sort();
+      const nearest = dates.find(d => d >= todayStr);
+      if (nearest) {
+        const d = new Date(nearest + 'T00:00:00');
+        if (d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth()) {
+          setSelectedDate(nearest);
+        }
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading]);
+  }
 
   const monthKey = `${currentYear}-${pad(currentMonth + 1)}`;
   const fetchedAt = data.monthsFetched[monthKey];

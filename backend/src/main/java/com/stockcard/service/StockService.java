@@ -56,6 +56,8 @@ public class StockService {
 
     @Transactional
     public Stock create(Stock stock) {
+        if (stock.getMarket() == null || stock.getMarket().isBlank()) stock.setMarket("CN");
+        if (stock.getResearchValue() == null) stock.setResearchValue(0);
         Stock saved = stockRepository.save(stock);
         recordTimeline(saved, "CREATE", "新增股票记录");
         return saved;
@@ -267,7 +269,7 @@ public class StockService {
         if (kw.isEmpty()) {
             return stockRepository.findByArchivedFalse();
         }
-        String pattern = "%" + kw + "%";
+        String pattern = SearchPatterns.contains(kw);
         Set<Long> ids = new HashSet<>();
         ids.addAll(stockDocumentRepository.findStockIdsByTitleOrContentContaining(pattern));
         ids.addAll(stockTimelineRepository.findStockIdsByDescriptionContaining(pattern));

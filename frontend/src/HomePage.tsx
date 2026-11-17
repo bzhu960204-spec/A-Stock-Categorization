@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemePicker } from './ThemePicker';
-import type { ModuleId } from './Root';
-import { getConfig, saveConfig } from './api';
+import type { ModuleId } from './app/modules';
+import { getConfig, saveConfig, type AppConfig } from './api';
 
 interface Module {
   id: ModuleId;
@@ -114,17 +114,20 @@ interface HomePageProps {
 export default function HomePage({ onSelectModule }: HomePageProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [apiKeyStatus, setApiKeyStatus] = useState<AppConfig | null>(null);
   const [apiKeySaving, setApiKeySaving] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [apiKeyError, setApiKeyError] = useState('');
   const settingsRef = useRef<HTMLDivElement>(null);
 
+  const loadConfig = useCallback(() => {
+    getConfig().then(res => setApiKeyStatus(res.data)).catch(() => {});
+  }, []);
+
   useEffect(() => {
     if (!showSettings) return;
-    getConfig().then(res => {
-      setApiKey(res.data.twelvedataApiKey ?? '');
-    }).catch(() => {});
-  }, [showSettings]);
+    loadConfig();
+  }, [showSettings, loadConfig]);
 
   // Close settings panel when clicking outside
   useEffect(() => {
@@ -138,20 +141,32 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, [showSettings]);
 
-  const handleSaveSettings = async () => {
+  // An empty value clears the key saved from the UI (falls back to .env).
+  const persistApiKey = async (value: string) => {
     setApiKeySaving(true);
     setApiKeyError('');
     setApiKeySaved(false);
     try {
-      await saveConfig({ twelvedataApiKey: apiKey.trim() });
+      await saveConfig({ twelvedataApiKey: value });
+      setApiKey('');
       setApiKeySaved(true);
       setTimeout(() => setApiKeySaved(false), 2500);
+      loadConfig();
     } catch {
       setApiKeyError('保存失败，请检查后端是否运行');
     } finally {
       setApiKeySaving(false);
     }
   };
+
+  const handleSaveSettings = () => persistApiKey(apiKey.trim());
+  const handleClearApiKey = () => persistApiKey('');
+
+  const apiKeyStatusText = !apiKeyStatus
+    ? ''
+    : apiKeyStatus.twelvedataApiKeyConfigured
+      ? `当前：${apiKeyStatus.twelvedataApiKeyMasked}（${apiKeyStatus.twelvedataApiKeySource === 'DATABASE' ? '界面保存' : '.env / 环境变量'}）`
+      : '当前：未配置';
 
   return (
     <div className="app-container">
@@ -177,13 +192,15 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
             <div className="home-settings-input-row">
               <input
                 className="home-settings-input"
-                type="text"
+                type="password"
+                autoComplete="off"
                 value={apiKey}
                 onChange={e => { setApiKey(e.target.value); setApiKeySaved(false); setApiKeyError(''); }}
-                placeholder="输入你的 Twelve Data API Key"
+                placeholder={apiKeyStatus?.twelvedataApiKeyConfigured ? '输入新 Key 以替换当前值' : '输入你的 Twelve Data API Key'}
                 spellCheck={false}
               />
             </div>
+            {apiKeyStatusText && <span className="home-settings-hint">{apiKeyStatusText}</span>}
             <span className="home-settings-hint">
               用于美股/港股/全球股票搜索。申请地址：
               <a href="https://twelvedata.com" target="_blank" rel="noreferrer">twelvedata.com</a>
@@ -193,8 +210,16 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
             <button
               className="confirm-btn"
               onClick={handleSaveSettings}
-              disabled={apiKeySaving}
+              disabled={apiKeySaving || !apiKey.trim()}
             >{apiKeySaving ? '保存中…' : '保存全部'}</button>
+            {apiKeyStatus?.twelvedataApiKeySource === 'DATABASE' && (
+              <button
+                className="cancel-btn"
+                onClick={handleClearApiKey}
+                disabled={apiKeySaving}
+                title="删除界面保存的 Key，改用 .env 中的配置"
+              >清除已保存</button>
+            )}
             {apiKeySaved && <span className="home-settings-ok">✓ 已保存</span>}
             {apiKeyError && <span className="home-settings-err">{apiKeyError}</span>}
           </div>

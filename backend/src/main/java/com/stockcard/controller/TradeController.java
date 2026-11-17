@@ -3,6 +3,8 @@ package com.stockcard.controller;
 import com.stockcard.entity.Trade;
 import com.stockcard.entity.TradeCategory;
 import com.stockcard.service.TradeService;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +26,7 @@ public class TradeController {
     @Data
     @NoArgsConstructor
     static class CategoryPayload {
+        @Size(max = 100)
         private String name;
     }
 
@@ -31,7 +34,9 @@ public class TradeController {
     @NoArgsConstructor
     static class TradePayload {
         private Long categoryId;
+        @Size(max = 100)
         private String subCategory;
+        @Size(max = 200)
         private String title;
         private String content;
         private Integer rating;
@@ -72,7 +77,7 @@ public class TradeController {
     }
 
     @PostMapping("/categories")
-    public ResponseEntity<TradeCategory> createCategory(@RequestBody CategoryPayload payload) {
+    public ResponseEntity<TradeCategory> createCategory(@Valid @RequestBody CategoryPayload payload) {
         if (payload.getName() == null || payload.getName().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -82,7 +87,7 @@ public class TradeController {
     }
 
     @PutMapping("/categories/{id}")
-    public ResponseEntity<TradeCategory> updateCategory(@PathVariable Long id, @RequestBody CategoryPayload payload) {
+    public ResponseEntity<TradeCategory> updateCategory(@PathVariable Long id, @Valid @RequestBody CategoryPayload payload) {
         return tradeService.updateCategory(id, payload.getName())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -106,13 +111,12 @@ public class TradeController {
 
     @GetMapping("/search")
     public List<TradeDto> search(@RequestParam String keyword) {
-        String kw = keyword.trim().toLowerCase();
-        if (kw.isEmpty()) return List.of();
-        return tradeService.search("%" + kw + "%").stream().map(TradeDto::from).collect(Collectors.toList());
+        if (keyword.isBlank()) return List.of();
+        return tradeService.search(keyword).stream().map(TradeDto::from).collect(Collectors.toList());
     }
 
     @PostMapping
-    public ResponseEntity<TradeDto> createTrade(@RequestBody TradePayload payload) {
+    public ResponseEntity<TradeDto> createTrade(@Valid @RequestBody TradePayload payload) {
         if (payload.getTitle() == null || payload.getTitle().isBlank()) {
             return ResponseEntity.badRequest().build();
         }
@@ -122,7 +126,7 @@ public class TradeController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<TradeDto> updateTrade(@PathVariable Long id, @RequestBody TradePayload payload) {
+    public ResponseEntity<TradeDto> updateTrade(@PathVariable Long id, @Valid @RequestBody TradePayload payload) {
         return tradeService.update(id, payload.getTitle(), payload.getContent(),
                         payload.getSubCategory(), payload.getRating(), payload.getCategoryId())
                 .map(trade -> ResponseEntity.ok(TradeDto.from(trade)))

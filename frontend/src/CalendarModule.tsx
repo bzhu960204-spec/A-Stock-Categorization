@@ -211,7 +211,7 @@ function ImportModal({ onImport, onCancel, importing, error }: ImportModalProps)
           </div>
           <div className="cal-import-hint">
             根节点为数组，每条必填 <code>title</code>、<code>date</code>（YYYY-MM-DD）。
-            category：政策 / 财报 / 经济数据 / 央行 / 其他 &nbsp;| 
+            category：政策 / 财报 / 经济数据 / 央行 / 其他 &nbsp;|
             importance： HIGH / MEDIUM / LOW
           </div>
           <div className="cal-modal-actions">
@@ -237,7 +237,7 @@ export default function CalendarModule({ onGoHome }: CalendarModuleProps) {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1); // 1-based
   const [events, setEvents] = useState<MarketEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   // modal state
@@ -252,22 +252,27 @@ export default function CalendarModule({ onGoHome }: CalendarModuleProps) {
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importError, setImportError] = useState('');
 
-  const fetchEvents = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await getMarketEvents(year, month);
-      setEvents(res.data);
-    } catch {
-      setEvents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [year, month]);
+  // Requests events for the current month; callers that refresh in place must set `loading` first.
+  const requestEvents = useCallback(() =>
+    getMarketEvents(year, month)
+      .then(res => { setEvents(res.data); })
+      .catch(() => { setEvents([]); })
+      .finally(() => { setLoading(false); }), [year, month]);
 
-  useEffect(() => {
-    fetchEvents();
+  const fetchEvents = useCallback(() => {
+    setLoading(true);
+    return requestEvents();
+  }, [requestEvents]);
+
+  // Reset selection and show loading whenever the displayed month changes (adjusting state during render).
+  const [prevYearMonth, setPrevYearMonth] = useState({ year, month });
+  if (prevYearMonth.year !== year || prevYearMonth.month !== month) {
+    setPrevYearMonth({ year, month });
+    setLoading(true);
     setSelectedDay(null);
-  }, [fetchEvents]);
+  }
+
+  useEffect(() => { requestEvents(); }, [requestEvents]);
 
   // ── calendar grid ──
   const totalDays = daysInMonth(year, month);

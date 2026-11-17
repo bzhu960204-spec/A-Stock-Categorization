@@ -1,6 +1,9 @@
 package com.stockcard.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
@@ -18,14 +21,19 @@ public class ValuationSnapshot {
     private Long id;
 
     /** 股票代码，如 "AAPL" / "600519" */
+    @NotBlank
+    @Size(max = 20)
     @Column(nullable = false, length = 20)
     private String ticker;
 
     /** 公司名称，如 "Apple Inc." */
+    @NotBlank
+    @Size(max = 100)
     @Column(nullable = false, length = 100)
     private String companyName;
 
     /** 本次估值的快照日期（可以是任意历史日期） */
+    @NotNull
     @Column(nullable = false)
     private LocalDate snapshotDate;
 
@@ -75,6 +83,7 @@ public class ValuationSnapshot {
     private Double ttmRoicY4;
 
     /** 可选备注 */
+    @Size(max = 500)
     @Column(length = 500)
     private String notes;
 

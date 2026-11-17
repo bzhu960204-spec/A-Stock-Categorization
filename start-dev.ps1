@@ -1,7 +1,9 @@
 param(
   [int]$BackendPort = 8085,
   [int]$FrontendPort = 5173,
-  [switch]$StopExisting = $false
+  [switch]$StopExisting = $false,
+  # Expose the dev UI to other devices on the network (no auth — use with care).
+  [switch]$Lan = $false
 )
 
 $ErrorActionPreference = 'Stop'
@@ -91,7 +93,7 @@ $backendJob = Start-Job -Name 'backend-dev' -ScriptBlock {
 
   Set-Location $Dir
   $env:SERVER_PORT = "$Port"
-  $env:APP_CORS_ALLOWED_ORIGINS = "http://localhost:$UiPort"
+  $env:SPRING_PROFILES_ACTIVE = 'dev'
 
   & mvn spring-boot:run 2>&1 | ForEach-Object { $_.ToString() }
 } -ArgumentList $backendDir, $BackendPort, $FrontendPort
@@ -123,13 +125,15 @@ if (-not $ready -and $backendJob.State -in @('Completed', 'Failed', 'Stopped')) 
 }
 
 $frontendJob = Start-Job -Name 'frontend-dev' -ScriptBlock {
-  param([string]$Dir, [int]$ApiPort, [int]$Port)
+  param([string]$Dir, [int]$ApiPort, [int]$Port, [string]$BindHost)
 
   Set-Location $Dir
   $env:BACKEND_PORT = "$ApiPort"
 
-  & npm run dev -- --host 0.0.0.0 --port $Port 2>&1 | ForEach-Object { $_.ToString() }
-} -ArgumentList $frontendDir, $BackendPort, $FrontendPort
+  & npm run dev -- --host $BindHost --port $Port 2>&1 | ForEach-Object { $_.ToString() }
+} -ArgumentList $frontendDir, $BackendPort, $FrontendPort, $(if ($Lan) { '0.0.0.0' } else { '127.0.0.1' })
+
+if ($Lan) { Write-Host "WARNING: -Lan set, the frontend (and /api via proxy) is reachable from other devices on the network." }
 
 Write-Host "Started backend on http://localhost:$BackendPort"
 Write-Host "Started frontend on http://localhost:$FrontendPort"

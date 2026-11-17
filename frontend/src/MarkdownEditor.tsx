@@ -6,6 +6,23 @@ interface MarkdownEditorProps {
   placeholder?: string;
 }
 
+interface ToolbarButtonProps {
+  label: string;
+  title: string;
+  onAction: () => void;
+}
+
+function ToolbarButton({ label, title, onAction }: ToolbarButtonProps) {
+  return (
+    <button
+      type="button"
+      className="md-tb-btn"
+      onMouseDown={e => { e.preventDefault(); onAction(); }}
+      title={title}
+    >{label}</button>
+  );
+}
+
 export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -59,33 +76,24 @@ export function MarkdownEditor({ value, onChange, placeholder }: MarkdownEditorP
     });
   };
 
-  const btn = (label: string, action: () => void, title: string) => (
-    <button
-      type="button"
-      className="md-tb-btn"
-      onMouseDown={e => { e.preventDefault(); action(); }}
-      title={title}
-    >{label}</button>
-  );
-
   return (
     <div className="md-editor-wrap">
       <div className="md-toolbar">
-        {btn('B', () => wrapSelection('**'), '加粗')}
-        {btn('I', () => wrapSelection('*'), '斜体')}
-        {btn('S', () => wrapSelection('~~'), '删除线')}
+        <ToolbarButton label="B" title="加粗" onAction={() => wrapSelection('**')} />
+        <ToolbarButton label="I" title="斜体" onAction={() => wrapSelection('*')} />
+        <ToolbarButton label="S" title="删除线" onAction={() => wrapSelection('~~')} />
         <span className="md-tb-sep" />
-        {btn('H1', () => insertLinePrefix('# '), '一级标题')}
-        {btn('H2', () => insertLinePrefix('## '), '二级标题')}
-        {btn('H3', () => insertLinePrefix('### '), '三级标题')}
+        <ToolbarButton label="H1" title="一级标题" onAction={() => insertLinePrefix('# ')} />
+        <ToolbarButton label="H2" title="二级标题" onAction={() => insertLinePrefix('## ')} />
+        <ToolbarButton label="H3" title="三级标题" onAction={() => insertLinePrefix('### ')} />
         <span className="md-tb-sep" />
-        {btn('•', () => insertLinePrefix('- '), '无序列表')}
-        {btn('1.', () => insertLinePrefix('1. '), '有序列表')}
-        {btn('❝', () => insertLinePrefix('> '), '引用')}
-        {btn('`', () => wrapSelection('`'), '行内代码')}
-        {btn('```', () => insertBlock('```\n\n```'), '代码块')}
+        <ToolbarButton label="•" title="无序列表" onAction={() => insertLinePrefix('- ')} />
+        <ToolbarButton label="1." title="有序列表" onAction={() => insertLinePrefix('1. ')} />
+        <ToolbarButton label="❝" title="引用" onAction={() => insertLinePrefix('> ')} />
+        <ToolbarButton label="`" title="行内代码" onAction={() => wrapSelection('`')} />
+        <ToolbarButton label="```" title="代码块" onAction={() => insertBlock('```\n\n```')} />
         <span className="md-tb-sep" />
-        {btn('—', () => insertBlock('---'), '分割线')}
+        <ToolbarButton label="—" title="分割线" onAction={() => insertBlock('---')} />
       </div>
       <textarea
         ref={textareaRef}

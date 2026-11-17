@@ -1,53 +1,67 @@
-import { useState, useEffect } from 'react';
-import App from './App';
-import HomePage from './HomePage';
-import ResearchModule from './ResearchModule';
-import CalendarModule from './CalendarModule';
-import EarningsCalendarModule from './EarningsCalendarModule';
-import TechCycleModule from './TechCycleModule';
-import IdeaModule from './IdeaModule';
-import TradeModule from './TradeModule';
-import ValuationModule from './ValuationModule';
-import ArchiveModule from './ArchiveModule';
+import { lazy, Suspense, useCallback, type ComponentType } from 'react';
+import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router';
+import { PageLoading } from './shared/ui/PageLoading';
+import { isArchiveKind, modulePath, type ArchiveKind } from './app/modules';
 
-export type ModuleId = 'home' | 'stocks' | 'research' | 'calendar' | 'earnings-calendar' | 'techcycle' | 'ideas' | 'trades' | 'valuation' | 'archive';
+// Each module is its own chunk, fetched the first time its route is visited.
+const HomePage = lazy(() => import('./HomePage'));
+const StocksModule = lazy(() => import('./App'));
+const ResearchModule = lazy(() => import('./ResearchModule'));
+const CalendarModule = lazy(() => import('./CalendarModule'));
+const EarningsCalendarModule = lazy(() => import('./EarningsCalendarModule'));
+const TechCycleModule = lazy(() => import('./TechCycleModule'));
+const IdeaModule = lazy(() => import('./IdeaModule'));
+const TradeModule = lazy(() => import('./TradeModule'));
+const ValuationModule = lazy(() => import('./features/valuation/ValuationModule'));
+const ArchiveModule = lazy(() => import('./ArchiveModule'));
+
+function useNavigateTo(path: string) {
+  const navigate = useNavigate();
+  return useCallback(() => navigate(path), [navigate, path]);
+}
+
+function HomeRoute() {
+  const navigate = useNavigate();
+  return <HomePage onSelectModule={id => navigate(modulePath(id))} />;
+}
+
+function ModuleRoute({ component: Module }: { component: ComponentType<{ onGoHome: () => void }> }) {
+  const goHome = useNavigateTo('/');
+  return <Module onGoHome={goHome} />;
+}
+
+function ArchiveRoute() {
+  const { kind } = useParams();
+  const navigate = useNavigate();
+  const goHome = useNavigateTo('/');
+  const backToArchive = useNavigateTo('/archive');
+
+  if (kind === undefined) {
+    return <ArchiveModule onGoHome={goHome} onSelect={(k: ArchiveKind) => navigate(`/archive/${k}`)} />;
+  }
+  if (!isArchiveKind(kind)) return <Navigate to="/archive" replace />;
+  if (kind === 'stocks') return <StocksModule onGoHome={backToArchive} forceArchived />;
+  if (kind === 'reports') return <ResearchModule onGoHome={backToArchive} forceArchived />;
+  return <IdeaModule onGoHome={backToArchive} forceArchived />;
+}
 
 export default function Root() {
-  const [module, setModule] = useState<ModuleId>(() => {
-    const saved = localStorage.getItem('activeModule');
-    return (saved as ModuleId) || 'home';
-  });
-
-  useEffect(() => {
-    localStorage.setItem('activeModule', module);
-  }, [module]);
-
-  if (module === 'stocks') {
-    return <App onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'research') {
-    return <ResearchModule onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'calendar') {
-    return <CalendarModule onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'earnings-calendar') {
-    return <EarningsCalendarModule onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'techcycle') {
-    return <TechCycleModule onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'ideas') {
-    return <IdeaModule onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'trades') {
-    return <TradeModule onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'valuation') {
-    return <ValuationModule onGoHome={() => setModule('home')} />;
-  }
-  if (module === 'archive') {
-    return <ArchiveModule onGoHome={() => setModule('home')} />;
-  }
-  return <HomePage onSelectModule={setModule} />;
+  return (
+    <Suspense fallback={<PageLoading />}>
+      <Routes>
+        <Route path="/" element={<HomeRoute />} />
+        <Route path="/stocks" element={<ModuleRoute component={StocksModule} />} />
+        <Route path="/research" element={<ModuleRoute component={ResearchModule} />} />
+        <Route path="/calendar" element={<ModuleRoute component={CalendarModule} />} />
+        <Route path="/earnings-calendar" element={<ModuleRoute component={EarningsCalendarModule} />} />
+        <Route path="/techcycle" element={<ModuleRoute component={TechCycleModule} />} />
+        <Route path="/ideas" element={<ModuleRoute component={IdeaModule} />} />
+        <Route path="/trades" element={<ModuleRoute component={TradeModule} />} />
+        <Route path="/valuation" element={<ModuleRoute component={ValuationModule} />} />
+        <Route path="/archive" element={<ArchiveRoute />} />
+        <Route path="/archive/:kind" element={<ArchiveRoute />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
+  );
 }

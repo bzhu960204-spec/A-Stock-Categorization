@@ -17,7 +17,6 @@ import {
   getArchivedSectorReports, archiveSectorReport, unarchiveSectorReport,
   type Sector, type SectorReport,
 } from './api';
-import './App.css';
 
 interface ResearchModuleProps {
   onGoHome: () => void;
@@ -28,11 +27,11 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
   const [reports, setReports] = useState<SectorReport[]>([]);
-  const [loadingReports, setLoadingReports] = useState(false);
+  const [loadingReports, setLoadingReports] = useState(!forceArchived);
 
   // Archive view
   const [archivedReports, setArchivedReports] = useState<SectorReport[]>([]);
-  const [loadingArchived, setLoadingArchived] = useState(false);
+  const [loadingArchived, setLoadingArchived] = useState(!!forceArchived);
 
   // Modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -62,63 +61,71 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
 
   const docEditorRef = useRef<DocEditorHandle>(null);
 
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    setModalReport(null);
+    setSaveError('');
+  }, []);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === 'Escape' && modalOpen && modalMode !== 'edit') closeModal(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [modalOpen]);
+  }, [modalOpen, modalMode, closeModal]);
 
-  const loadSectors = useCallback(async () => {
-    const res = await getSectors();
-    setSectors(res.data);
-  }, []);
+  const loadSectors = useCallback(() =>
+    getSectors().then(res => { setSectors(res.data); }), []);
 
   useEffect(() => { loadSectors(); }, [loadSectors]);
 
-  const loadReports = useCallback(async (sectorId: number) => {
-    setLoadingReports(true);
-    try {
-      const res = await getSectorReports(sectorId);
-      setReports(res.data);
-    } finally {
-      setLoadingReports(false);
-    }
+  const requestReports = useCallback((sectorId: number | null) => {
+    const request = sectorId !== null ? getSectorReports(sectorId) : getAllSectorReports();
+    return request
+      .then(res => { setReports(res.data); })
+      .finally(() => { setLoadingReports(false); });
   }, []);
 
-  const loadAllReports = useCallback(async () => {
+  const loadReports = useCallback((sectorId: number) => {
     setLoadingReports(true);
-    try {
-      const res = await getAllSectorReports();
-      setReports(res.data);
-    } finally {
-      setLoadingReports(false);
-    }
-  }, []);
+    return requestReports(sectorId);
+  }, [requestReports]);
 
-  useEffect(() => {
-    if (!forceArchived) {
-      if (selectedSector) {
-        loadReports(selectedSector.id);
-      } else {
-        loadAllReports();
-      }
-    }
+  const loadAllReports = useCallback(() => {
+    setLoadingReports(true);
+    return requestReports(null);
+  }, [requestReports]);
+
+  // Reset filters (and show loading) when the selected sector changes (adjusting state during render).
+  const [prevSelectedSector, setPrevSelectedSector] = useState(selectedSector);
+  if (selectedSector !== prevSelectedSector) {
+    setPrevSelectedSector(selectedSector);
+    if (!forceArchived) setLoadingReports(true);
     setSearch('');
     setStarFilter(0);
     setCategoryFilter('全部');
-  }, [selectedSector, loadReports, loadAllReports]);
+  }
 
-  const loadArchived = useCallback(async () => {
+  useEffect(() => {
+    if (!forceArchived) requestReports(selectedSector ? selectedSector.id : null);
+  }, [selectedSector, forceArchived, requestReports]);
+
+  const requestArchived = useCallback(() =>
+    getArchivedSectorReports()
+      .then(res => { setArchivedReports(res.data); })
+      .finally(() => { setLoadingArchived(false); }), []);
+
+  const loadArchived = useCallback(() => {
     setLoadingArchived(true);
-    try {
-      const res = await getArchivedSectorReports();
-      setArchivedReports(res.data);
-    } finally {
-      setLoadingArchived(false);
-    }
-  }, []);
+    return requestArchived();
+  }, [requestArchived]);
 
-  useEffect(() => { if (forceArchived) loadArchived(); }, [forceArchived, loadArchived]);
+  // Show loading as soon as the archive view is entered (adjusting state during render).
+  const [prevForceArchived, setPrevForceArchived] = useState(forceArchived);
+  if (forceArchived !== prevForceArchived) {
+    setPrevForceArchived(forceArchived);
+    if (forceArchived) setLoadingArchived(true);
+  }
+  useEffect(() => { if (forceArchived) requestArchived(); }, [forceArchived, requestArchived]);
 
   const handleArchiveReport = async (report: SectorReport, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -203,12 +210,6 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
     if (selectedSector?.id === sector.id) setSelectedSector(null);
     await loadSectors();
     await loadArchived();
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setModalReport(null);
-    setSaveError('');
   };
 
   const openReadModal = (report: SectorReport) => {

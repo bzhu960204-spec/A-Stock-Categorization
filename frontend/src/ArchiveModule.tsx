@@ -1,37 +1,18 @@
-import { useState } from 'react';
 import { ThemePicker } from './ThemePicker';
-import App from './App';
-import ResearchModule from './ResearchModule';
-import IdeaModule from './IdeaModule';
-import './App.css';
+import type { ArchiveKind } from './app/modules';
 
 interface ArchiveModuleProps {
   onGoHome: () => void;
+  onSelect: (kind: ArchiveKind) => void;
 }
 
-type Kind = 'stock' | 'report' | 'idea';
-
-const KINDS: Array<{ id: Kind; icon: string; label: string; labelEn: string; description: string }> = [
-  { id: 'stock', icon: '📈', label: '个股', labelEn: 'STOCK INFO', description: '查看、恢复或彻底删除已归档的个股' },
-  { id: 'report', icon: '📋', label: '研报', labelEn: 'SECTOR RESEARCH', description: '查看、恢复或彻底删除已归档的行业研报' },
-  { id: 'idea', icon: '💡', label: '赚钱 Idea', labelEn: 'IDEA VAULT', description: '查看、恢复或彻底删除已归档的赚钱 Idea' },
+const KINDS: Array<{ id: ArchiveKind; icon: string; label: string; labelEn: string; description: string }> = [
+  { id: 'stocks', icon: '📈', label: '个股', labelEn: 'STOCK INFO', description: '查看、恢复或彻底删除已归档的个股' },
+  { id: 'reports', icon: '📋', label: '研报', labelEn: 'SECTOR RESEARCH', description: '查看、恢复或彻底删除已归档的行业研报' },
+  { id: 'ideas', icon: '💡', label: '赚钱 Idea', labelEn: 'IDEA VAULT', description: '查看、恢复或彻底删除已归档的赚钱 Idea' },
 ];
 
-export default function ArchiveModule({ onGoHome }: ArchiveModuleProps) {
-  const [selected, setSelected] = useState<Kind | null>(null);
-
-  const backToSelector = () => setSelected(null);
-
-  if (selected === 'stock') {
-    return <App onGoHome={backToSelector} forceArchived />;
-  }
-  if (selected === 'report') {
-    return <ResearchModule onGoHome={backToSelector} forceArchived />;
-  }
-  if (selected === 'idea') {
-    return <IdeaModule onGoHome={backToSelector} forceArchived />;
-  }
-
+export default function ArchiveModule({ onGoHome, onSelect }: ArchiveModuleProps) {
   return (
     <div className="app-container">
       <header className="glass-header">
@@ -57,7 +38,7 @@ export default function ArchiveModule({ onGoHome }: ArchiveModuleProps) {
                 <button
                   key={k.id}
                   className="home-nav-row"
-                  onClick={() => setSelected(k.id)}
+                  onClick={() => onSelect(k.id)}
                 >
                   <span className="home-nav-icon">{k.icon}</span>
                   <span className="home-nav-label">{k.label}</span>

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
-import { marked } from 'marked';
+import { isHtmlContent, toEditorHtml } from './shared/markdown';
+import { MarkdownView } from './shared/MarkdownView';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
   getStockDocuments, createStockDocument, updateStockDocument, deleteStockDocument, uploadDocImage,
@@ -41,7 +39,7 @@ interface DocumentCenterModalProps {
 
 export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps) {
   const [documents, setDocuments] = useState<StockDocument[]>([]);
-  const [documentsLoading, setDocumentsLoading] = useState(false);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
   const [docViewMode, setDocViewMode] = useState<'list' | 'read' | 'edit' | 'compose' | 'earnings-read' | 'earnings-compose' | 'earnings-edit'>('list');
   const [selectedDocument, setSelectedDocument] = useState<StockDocument | null>(null);
   const [editDocTitle, setEditDocTitle] = useState('');
@@ -70,9 +68,10 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
   const [pendingDeleteEarnings, setPendingDeleteEarnings] = useState<EarningsReport | null>(null);
   const earningsEditorRef = useRef<DocEditorHandle>(null);
 
-  // Load documents + earnings whenever the target stock changes.
-  useEffect(() => {
-    let cancelled = false;
+  // Reset per-stock state whenever the target stock changes (adjusting state during render).
+  const [prevStockId, setPrevStockId] = useState(stock.id);
+  if (stock.id !== prevStockId) {
+    setPrevStockId(stock.id);
     setDocuments([]);
     setEarningsReports([]);
     setDocViewMode('list');
@@ -86,6 +85,11 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
     setPendingDeleteDoc(null);
     setPendingDeleteEarnings(null);
     setDocumentsLoading(true);
+  }
+
+  // Load documents + earnings whenever the target stock changes.
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const [docRes, earningsRes] = await Promise.all([
@@ -207,8 +211,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
   };
 
   const openEarningsEdit = (report: EarningsReport) => {
-    const raw = report.content ?? '';
-    const html = raw.trimStart().startsWith('<') ? raw : String(marked.parse(raw));
+    const html = toEditorHtml(report.content ?? '');
     setEarningsFormTitle(report.title);
     setEarningsFormPeriod(report.fiscalPeriod ?? '');
     setEarningsFormResult(report.result ?? '');
@@ -358,9 +361,9 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
                     const createdAt = item.data.createdAt;
                     const category = isEarnings ? '财报' : ((item.data as StockDocument).category || '');
                     const rawContent = isEarnings ? ((item.data as EarningsReport).content || '') : (item.data as StockDocument).content;
-                    const cleanContent = rawContent.trimStart().startsWith('<')
+                    const cleanContent = isHtmlContent(rawContent)
                       ? rawContent.replace(/<[^>]*>/g, '')
-                      : rawContent.replace(/[#*`>\-_~\[\]()]/g, '');
+                      : rawContent.replace(/[#*`>\-_~[\]()]/g, '');
                     const preview = cleanContent.trim().slice(0, 120);
                     const dt = new Date(createdAt);
                     const timeStr = dt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -428,11 +431,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
               <button className="doc-back-btn" onClick={() => setDocViewMode('list')}>‹ 返回列表</button>
               <div className="doc-read-actions">
                 <button className="doc-action-edit" onClick={() => {
-                  const raw = selectedDocument.content;
-                  // Convert legacy Markdown to HTML for Tiptap
-                  const html = raw.trimStart().startsWith('<')
-                    ? raw
-                    : String(marked.parse(raw));
+                  const html = toEditorHtml(selectedDocument.content);
                   setEditDocTitle(selectedDocument.title);
                   setEditDocCategory(selectedDocument.category || '');
                   setEditDocContent(html);
@@ -454,12 +453,10 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
                 )}
               </div>
               <h1 className="doc-read-title">{selectedDocument.title}</h1>
-              {selectedDocument.content.trimStart().startsWith('<') ? (
+              {isHtmlContent(selectedDocument.content) ? (
                 <DocEditor value={selectedDocument.content} onChange={() => {}} readonly />
               ) : (
-                <div className="doc-markdown-body">
-                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{selectedDocument.content}</ReactMarkdown>
-                </div>
+                <MarkdownView className="doc-markdown-body" markdown={selectedDocument.content} />
               )}
             </div>
 
@@ -595,12 +592,10 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
                 </div>
               </div>
               {selectedEarnings.content?.trim() ? (
-                selectedEarnings.content.trimStart().startsWith('<') ? (
+                isHtmlContent(selectedEarnings.content) ? (
                   <DocEditor value={selectedEarnings.content} onChange={() => {}} readonly />
                 ) : (
-                  <div className="doc-markdown-body">
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{selectedEarnings.content}</ReactMarkdown>
-                  </div>
+                  <MarkdownView className="doc-markdown-body" markdown={selectedEarnings.content} />
                 )
               ) : (
                 <div className="profile-section-empty" style={{ marginTop: 24 }}>

@@ -1,10 +1,14 @@
 package com.stockcard.controller;
 
+import com.stockcard.dto.EarningsReportRequest;
+import com.stockcard.dto.StockDocumentRequest;
+import com.stockcard.dto.StockRequest;
 import com.stockcard.entity.EarningsReport;
 import com.stockcard.entity.StockDocument;
 import com.stockcard.entity.Stock;
 import com.stockcard.entity.StockTimeline;
 import com.stockcard.service.StockService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -26,13 +30,13 @@ public class StockController {
     }
 
     @PostMapping
-    public Stock createStock(@RequestBody Stock stock) {
-        return stockService.create(stock);
+    public Stock createStock(@Valid @RequestBody StockRequest stock) {
+        return stockService.create(stock.toEntity());
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Stock> updateStock(@PathVariable Long id, @RequestBody Stock stockDetails) {
-        return stockService.update(id, stockDetails)
+    public ResponseEntity<Stock> updateStock(@PathVariable Long id, @Valid @RequestBody StockRequest stockDetails) {
+        return stockService.update(id, stockDetails.toEntity())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -73,11 +77,8 @@ public class StockController {
     }
 
     @PostMapping("/{id}/documents")
-    public ResponseEntity<StockDocument> createStockDocument(@PathVariable Long id, @RequestBody StockDocument payload) {
-        if (payload == null || isBlank(payload.getTitle()) || isBlank(payload.getContent())) {
-            return ResponseEntity.badRequest().build();
-        }
-        return stockService.createDocument(id, payload)
+    public ResponseEntity<StockDocument> createStockDocument(@PathVariable Long id, @Valid @RequestBody StockDocumentRequest payload) {
+        return stockService.createDocument(id, payload.toEntity())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -86,11 +87,8 @@ public class StockController {
     public ResponseEntity<StockDocument> updateStockDocument(
             @PathVariable Long stockId,
             @PathVariable Long docId,
-            @RequestBody StockDocument payload) {
-        if (payload == null || isBlank(payload.getTitle()) || isBlank(payload.getContent())) {
-            return ResponseEntity.badRequest().build();
-        }
-        return stockService.updateDocument(stockId, docId, payload)
+            @Valid @RequestBody StockDocumentRequest payload) {
+        return stockService.updateDocument(stockId, docId, payload.toEntity())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -115,9 +113,8 @@ public class StockController {
 
     @PostMapping("/{id}/earnings")
     public ResponseEntity<EarningsReport> createEarningsReport(
-            @PathVariable Long id, @RequestBody EarningsReport payload) {
-        if (payload == null || isBlank(payload.getTitle())) return ResponseEntity.badRequest().build();
-        return stockService.createEarnings(id, payload)
+            @PathVariable Long id, @Valid @RequestBody EarningsReportRequest payload) {
+        return stockService.createEarnings(id, payload.toEntity())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -126,9 +123,8 @@ public class StockController {
     public ResponseEntity<EarningsReport> updateEarningsReport(
             @PathVariable Long stockId,
             @PathVariable Long reportId,
-            @RequestBody EarningsReport payload) {
-        if (payload == null || isBlank(payload.getTitle())) return ResponseEntity.badRequest().build();
-        return stockService.updateEarnings(stockId, reportId, payload)
+            @Valid @RequestBody EarningsReportRequest payload) {
+        return stockService.updateEarnings(stockId, reportId, payload.toEntity())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -181,9 +177,5 @@ public class StockController {
     @GetMapping("/search")
     public List<Stock> searchStocks(@RequestParam String keyword) {
         return stockService.search(keyword);
-    }
-
-    private boolean isBlank(String value) {
-        return value == null || value.trim().isEmpty();
     }
 }

@@ -38,10 +38,12 @@ function suggestByMarket(query: string, market: Market, limit: number) {
 
 function useLookupSuggestions(query: string, open: boolean, market: Market, minLen: number): LookupSuggestion[] {
   const [suggestions, setSuggestions] = useState<LookupSuggestion[]>([]);
+  const trimmed = query.trim();
+  const active = open && market !== 'OTHER' && trimmed.length >= minLen;
+  // Clear stale suggestions while lookup is inactive (adjusting state during render).
+  if (!active && suggestions.length > 0) setSuggestions([]);
   useEffect(() => {
-    if (!open || market === 'OTHER') { setSuggestions([]); return; }
-    const trimmed = query.trim();
-    if (trimmed.length < minLen) { setSuggestions([]); return; }
+    if (!active) return;
     const timer = setTimeout(async () => {
       try {
         const res = await suggestByMarket(trimmed, market, 8);
@@ -51,7 +53,7 @@ function useLookupSuggestions(query: string, open: boolean, market: Market, minL
       }
     }, 250);
     return () => clearTimeout(timer);
-  }, [query, open, market, minLen]);
+  }, [active, query, trimmed, market]);
   return suggestions;
 }
 
@@ -76,19 +78,24 @@ export function AddStockModal({ open, categories, initialCategoryIds, onClose, o
   const [lookingUp, setLookingUp] = useState(false);
   const [activeSuggestField, setActiveSuggestField] = useState<'code' | 'name' | null>(null);
 
-  // Initialize / reset fields whenever the dialog opens.
-  useEffect(() => {
-    if (!open) return;
-    setNewStockMarket('CN');
-    setNewStockCustomMarket('');
-    setNewStockCode('');
-    setNewStockName('');
-    setNewStockNotes('');
-    setNewStockCategoryIds(new Set(initialCategoryIds));
-    setNewStockCatSearch('');
-    setAddStockError('');
-    setActiveSuggestField(null);
-  }, [open, initialCategoryIds]);
+  // Initialize / reset fields whenever the dialog opens (adjusting state during render).
+  const [prevOpen, setPrevOpen] = useState(false);
+  const [prevInitialCategoryIds, setPrevInitialCategoryIds] = useState(initialCategoryIds);
+  if (open !== prevOpen || initialCategoryIds !== prevInitialCategoryIds) {
+    setPrevOpen(open);
+    setPrevInitialCategoryIds(initialCategoryIds);
+    if (open) {
+      setNewStockMarket('CN');
+      setNewStockCustomMarket('');
+      setNewStockCode('');
+      setNewStockName('');
+      setNewStockNotes('');
+      setNewStockCategoryIds(new Set(initialCategoryIds));
+      setNewStockCatSearch('');
+      setAddStockError('');
+      setActiveSuggestField(null);
+    }
+  }
 
   const handleLookup = async (value: string, field: 'code' | 'name') => {
     if (!value.trim() || newStockMarket === 'OTHER') return;

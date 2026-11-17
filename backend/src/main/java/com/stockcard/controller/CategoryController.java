@@ -1,5 +1,7 @@
 package com.stockcard.controller;
 
+import com.stockcard.dto.CategoryRequest;
+import jakarta.validation.Valid;
 import com.stockcard.entity.Category;
 import com.stockcard.service.CategoryService;
 import lombok.RequiredArgsConstructor;
@@ -21,13 +23,13 @@ public class CategoryController {
     }
 
     @PostMapping
-    public Category createCategory(@RequestBody Category category) {
-        return categoryService.create(category);
+    public Category createCategory(@Valid @RequestBody CategoryRequest category) {
+        return categoryService.create(category.toEntity());
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Category> updateCategory(@PathVariable Long id, @RequestBody Category categoryDetails) {
-        return categoryService.update(id, categoryDetails)
+    public ResponseEntity<Category> updateCategory(@PathVariable Long id, @Valid @RequestBody CategoryRequest categoryDetails) {
+        return categoryService.update(id, categoryDetails.toEntity())
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

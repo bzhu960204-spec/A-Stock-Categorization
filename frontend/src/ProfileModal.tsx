@@ -1,7 +1,5 @@
-import { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkBreaks from 'remark-breaks';
+import { useState } from 'react';
+import { MarkdownView } from './shared/MarkdownView';
 import { MarkdownEditor } from './MarkdownEditor';
 import { IndustryChainModal } from './IndustryChainModal';
 import { useEscapeKey } from './useEscapeKey';
@@ -49,15 +47,17 @@ export function ProfileModal({ stock, onClose, onSaved }: ProfileModalProps) {
   const [showIndustryChainModal, setShowIndustryChainModal] = useState(false);
   const [profileDraft, setProfileDraft] = useState<ProfileDraft>(() => draftFromStock(stock));
 
-  // Reset editor state whenever a different stock is opened.
-  useEffect(() => {
+  // Reset editor state whenever a different stock is opened (adjusting state during render).
+  const [prevStock, setPrevStock] = useState(stock);
+  if (stock !== prevStock) {
+    setPrevStock(stock);
     setProfileMode('read');
     setProfileActiveSection('business');
     setShowJsonImport(false);
     setJsonImportText('');
     setJsonImportError('');
     setProfileDraft(draftFromStock(stock));
-  }, [stock]);
+  }
 
   // Escape: close JSON overlay first, else close the modal (read mode only). Inactive while the
   // nested industry-chain modal is open (it handles its own Escape).
@@ -127,6 +127,9 @@ export function ProfileModal({ stock, onClose, onSaved }: ProfileModalProps) {
         code: stock.code,
         name: stock.name,
         market: stock.market,
+        // The update endpoint replaces every editable field, so carry over the ones this form doesn't edit.
+        recommender: stock.recommender,
+        researchValue: stock.researchValue,
         ...profileDraft,
       });
       onSaved(res.data);
@@ -230,9 +233,7 @@ export function ProfileModal({ stock, onClose, onSaved }: ProfileModalProps) {
                   {profileMode === 'read' ? (
                     <div className="profile-section-read">
                       {section.value?.trim() ? (
-                        <div className="doc-markdown-body">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} urlTransform={url => url}>{section.value}</ReactMarkdown>
-                        </div>
+                        <MarkdownView className="doc-markdown-body" markdown={section.value} />
                       ) : (
                         <div className="profile-section-empty">
                           <span className="profile-empty-icon">○</span>

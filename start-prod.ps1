@@ -2,7 +2,9 @@ param(
   [int]$Port = 8080,
   [switch]$Rebuild = $false,
   [switch]$NoBrowser = $false,
-  [switch]$NoLogFile = $false
+  [switch]$NoLogFile = $false,
+  # Expose the app to other devices on the network (no auth — use with care).
+  [switch]$Lan = $false
 )
 
 # Runs the packaged app in single-port "prod" mode: one Spring Boot process
@@ -144,6 +146,10 @@ try {
     "--server.port=$Port",
     "--app.web.dist=$distDir"
   )
+  if ($Lan) {
+    $jarArgs += '--server.address=0.0.0.0'
+    Write-Host "WARNING: -Lan set, the app is reachable from other devices on the network."
+  }
   if ($logFile) {
     & $javaExe @jarArgs 2>&1 | Tee-Object -FilePath $logFile
   } else {

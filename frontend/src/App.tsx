@@ -22,7 +22,6 @@ import {
   getArchivedStocks, archiveStock, unarchiveStock,
   type Stock, type Category, type StockTimelineEntry
 } from './api';
-import './App.css';
 
 
 // Resizable image component for document read view
@@ -94,16 +93,16 @@ function App({ onGoHome, forceArchived }: AppProps = {}) {
   const [selectedTimelineDayKey, setSelectedTimelineDayKey] = useState<string | null>(null);
   const [documentStock, setDocumentStock] = useState<Stock | null>(null);
 
-  const loadData = useCallback(async () => {
-    try {
-      const catRes = await getCategories();
-      setCategories(catRes.data);
-      // Re-run the filter effect instead of loading all stocks, so active filters are preserved.
-      setFilterKey(k => k + 1);
-    } catch (e) {
-      console.error('Failed to load data', e);
-    }
-  }, []);
+  const loadData = useCallback(() =>
+    getCategories()
+      .then(catRes => {
+        setCategories(catRes.data);
+        // Re-run the filter effect instead of loading all stocks, so active filters are preserved.
+        setFilterKey(k => k + 1);
+      })
+      .catch(e => {
+        console.error('Failed to load data', e);
+      }), []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -158,7 +157,8 @@ function App({ onGoHome, forceArchived }: AppProps = {}) {
     if (!editBasicInfoStock) return;
     setSavingBasicInfo(true);
     try {
-      const { categories: _cats, ...stockWithoutCategories } = editBasicInfoStock;
+      const stockWithoutCategories: Partial<Stock> = { ...editBasicInfoStock };
+      delete stockWithoutCategories.categories;
       const res = await updateStock(editBasicInfoStock.id, { ...stockWithoutCategories, ...basicInfoDraft });
       setStocks(prev => prev.map(s => s.id === res.data.id ? res.data : s));
       if (profileStock?.id === res.data.id) setProfileStock(res.data);

@@ -380,28 +380,33 @@ export default function TechCycleModule({ onGoHome }: TechCycleModuleProps) {
   const [editingPhase, setEditingPhase] = useState<TechCyclePhase | null>(null);
 
   // load cycles
-  const fetchCycles = useCallback(async () => {
-    const res = await getTechCycles();
-    setCycles(res.data);
-  }, []);
+  const fetchCycles = useCallback(() =>
+    getTechCycles().then(res => { setCycles(res.data); }), []);
 
   useEffect(() => { fetchCycles(); }, [fetchCycles]);
 
   // load phases when selection changes
-  const fetchPhases = useCallback(async (id: number) => {
+  const requestPhases = useCallback((id: number) =>
+    getTechCyclePhases(id)
+      .then(res => { setPhases(res.data); })
+      .finally(() => { setLoadingPhases(false); }), []);
+
+  const fetchPhases = useCallback((id: number) => {
     setLoadingPhases(true);
-    try {
-      const res = await getTechCyclePhases(id);
-      setPhases(res.data);
-    } finally {
-      setLoadingPhases(false);
-    }
-  }, []);
+    return requestPhases(id);
+  }, [requestPhases]);
+
+  // Adjusting state during render when the selection changes.
+  const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
+  if (selectedId !== prevSelectedId) {
+    setPrevSelectedId(selectedId);
+    if (selectedId !== null) setLoadingPhases(true);
+    else setPhases([]);
+  }
 
   useEffect(() => {
-    if (selectedId !== null) fetchPhases(selectedId);
-    else setPhases([]);
-  }, [selectedId, fetchPhases]);
+    if (selectedId !== null) requestPhases(selectedId);
+  }, [selectedId, requestPhases]);
 
   const selectedCycle = cycles.find(c => c.id === selectedId) ?? null;
 

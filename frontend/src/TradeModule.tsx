@@ -14,7 +14,6 @@ import {
   getTrades, searchTrades, createTrade, updateTrade, updateTradeRating, deleteTrade,
   type TradeCategory, type Trade,
 } from './api';
-import './App.css';
 
 interface TradeModuleProps {
   onGoHome: () => void;
@@ -23,7 +22,7 @@ interface TradeModuleProps {
 export default function TradeModule({ onGoHome }: TradeModuleProps) {
   const [categories, setCategories] = useState<TradeCategory[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Sidebar filter: null = all, number = category id
   const [filter, setFilter] = useState<null | number>(null);
@@ -61,6 +60,13 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
   const docEditorRef = useRef<DocEditorHandle>(null);
 
 
+  // ── Modal close ───────────────────────────────────────────────────────────
+  const closeModal = useCallback(() => {
+    setModalOpen(false);
+    setModalTrade(null);
+    setSaveError('');
+  }, []);
+
   // ── ESC closes modal (blocked in edit mode to prevent data loss) ──────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -68,34 +74,44 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [modalOpen, modalMode]);
+  }, [modalOpen, modalMode, closeModal]);
 
   // ── Load categories ───────────────────────────────────────────────────────
-  const loadCategories = useCallback(async () => {
-    const res = await getTradeCategories();
-    setCategories(res.data);
-  }, []);
+  const loadCategories = useCallback(() =>
+    getTradeCategories().then(res => { setCategories(res.data); }), []);
   useEffect(() => { loadCategories(); }, [loadCategories]);
 
   // ── Load trades ────────────────────────────────────────────────────────────
-  const loadTrades = useCallback(async () => {
-    setLoading(true);
-    setSubCategoryFilter('全部'); // reset sub-filter when folder changes
-    try {
-      const res = typeof filter === 'number'
-        ? await getTrades({ categoryId: filter })
-        : await getTrades();
-      setTrades(res.data);
-    } finally {
-      setLoading(false);
-    }
+  const requestTrades = useCallback(() => {
+    const request = typeof filter === 'number'
+      ? getTrades({ categoryId: filter })
+      : getTrades();
+    return request
+      .then(res => { setTrades(res.data); })
+      .finally(() => { setLoading(false); });
   }, [filter]);
-  useEffect(() => { loadTrades(); }, [loadTrades]);
+
+  const loadTrades = useCallback(() => {
+    setLoading(true);
+    setSubCategoryFilter('全部');
+    return requestTrades();
+  }, [requestTrades]);
+
+  // Reset sub-filter and show loading when the folder changes (adjusting state during render).
+  const [prevFilter, setPrevFilter] = useState(filter);
+  if (filter !== prevFilter) {
+    setPrevFilter(filter);
+    setLoading(true);
+    setSubCategoryFilter('全部');
+  }
+  useEffect(() => { requestTrades(); }, [requestTrades]);
 
   // ── Debounced global search ───────────────────────────────────────────────
+  // Clear results while the search box is empty (adjusting state during render).
+  if (!search.trim() && searchResults.length > 0) setSearchResults([]);
   useEffect(() => {
     const kw = search.trim();
-    if (!kw) { setSearchResults([]); return; }
+    if (!kw) return;
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
@@ -149,12 +165,6 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
   };
 
   // ── Modal ─────────────────────────────────────────────────────────────────
-  const closeModal = () => {
-    setModalOpen(false);
-    setModalTrade(null);
-    setSaveError('');
-  };
-
   const openReadModal = (trade: Trade) => {
     setModalTrade(trade);
     setModalMode('read');
