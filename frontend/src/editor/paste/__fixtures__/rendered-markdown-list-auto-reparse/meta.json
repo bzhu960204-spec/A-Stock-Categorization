@@ -1,0 +1,8 @@
+{
+  "description": "Same clipboard as rendered-markdown-list-rich, pasted in Auto mode (no code fence, so the HTML is used), then \"Re-parse as Markdown\" from the hint replaces the pasted range with the rendered plain text.",
+  "mode": "auto",
+  "clipboardFrom": "rendered-markdown-list-rich",
+  "actions": [
+    "reparse"
+  ]
+}

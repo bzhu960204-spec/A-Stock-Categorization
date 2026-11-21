@@ -5,8 +5,15 @@
 ## 技术栈
 
 - **后端**: Spring Boot 3.2.5 + JPA/H2 + REST API
-- **前端**: React 19 + TypeScript + Vite
-- **富文本编辑器**: Tiptap (Notion 级别的所见即所得编辑器)
+- **前端**: React 19 + TypeScript + Vite，react-router（每个模块一个 URL，按需懒加载）、TanStack Query（数据请求）
+- **富文本编辑器**: Tiptap (Notion 级别的所见即所得编辑器)；Markdown 统一用 marked + DOMPurify 渲染
+
+## 前端结构
+
+- 路由：`/stocks`、`/research`、`/techcycle`、`/ideas`、`/trades`、`/valuation`、`/calendar`、`/earnings-calendar`、`/archive`（及 `/archive/stocks|reports|ideas`），浏览器前进/后退、刷新、直接打开链接均可用；prod 模式下后端会把未知路径回退到 `index.html`。
+- 目录按功能逐步迁移：`src/features/<模块>/`（如 `stocks`、`valuation`）、`src/shared/`（通用组件、hooks、Markdown、图片上传）、`src/app/`（Provider、路由辅助）。新样式使用 CSS Modules（`*.module.css`），`App.css` 逐步拆分。
+- 交互反馈：统一使用 `useToast()` / `useConfirm()`（`src/shared/ui/feedback`），不要再用 `window.alert` / `window.confirm`；后端错误用 `api.ts` 的 `getErrorMessage` 显示（后端返回 `{message}`）。
+- 数据请求：新代码优先用 TanStack Query（`useQuery` + `queryKey`），写操作后 `invalidateQueries`；参考 `src/features/stocks/useStockData.ts`。
 
 ## 配置与启动
 
@@ -35,9 +42,15 @@ cd frontend && npm run lint   # ESLint
 
 表结构由 Flyway 管理（`backend/src/main/resources/db/migration`），Hibernate 只做校验（`ddl-auto=validate`）。
 
-- **修改实体（新增/修改字段或表）时**，必须新增一个迁移脚本，例如 `V3__add_stock_tags.sql`，否则启动会因 schema 校验失败而退出。
+- **修改实体（新增/修改字段或表）时**，必须新增一个迁移脚本，例如 `V4__add_stock_tags.sql`，否则启动会因 schema 校验失败而退出。
 - **已发布的迁移脚本不要修改**，有问题就再加一个新版本修正。
 - 引入 Flyway 之前创建的旧库，首次启动时会自动标记为 V1（不会重新执行 `V1__baseline.sql`），然后继续执行后续迁移。
+- 数据迁移也可以写成 Java 迁移（`backend/src/main/java/db/migration/V<n>__*.java`），例如 `V3__Extract_inline_images` 把旧内容里内嵌的 base64 图片转存到 `stock_images`。
+
+## 请求大小限制
+
+- 编辑器粘贴/拖入的图片会立即上传到 `/api/images`，正文只保存 `/api/images/{id}`，因此 JSON 请求体只含文本：超过 `app.request.max-body-size`（默认 10MB）的非 multipart 请求返回 413。
+- 文件上传（图片、Idea 附件）单个文件上限 20MB（`spring.servlet.multipart.max-file-size`），超出返回 413「上传文件过大」。
 
 改进计划与进度见 [docs/project-improvement](docs/project-improvement/project-improvement-plan.md)。
 
@@ -109,7 +122,7 @@ cd frontend && npm run lint   # ESLint
 
 项目需要一个像 Notion 一样强大的日志编辑器，支持：
 - 所见即所得编辑（WYSIWYG）
-- 图片粘贴直接内嵌
+- 图片粘贴/拖入即上传
 - 格式化工具栏（加粗、标题、列表等）
 - 兼容旧的 Markdown 内容
 
@@ -165,26 +178,12 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
       },
       editorProps: {
         handlePaste: (_, event) => {
-          const items = event.clipboardData?.items;
-          if (!items) return false;
-          for (const item of Array.from(items)) {
-            if (item.type.startsWith('image/')) {
-              event.preventDefault();
-              const file = item.getAsFile();
-              if (!file) return true;
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                const src = e.target?.result as string;
-                editor?.chain().focus().setImage({ src }).run();
-                suppressSyncRef.current = true;
-                onChange(editor?.getHTML() ?? '');
-                requestAnimationFrame(() => { suppressSyncRef.current = false; });
-              };
-              reader.readAsDataURL(file);
-              return true;
-            }
-          }
-          return false;
+          // 图片文件立即上传到 /api/images，正文只插入返回的 URL
+          const files = imageFilesFrom(event.clipboardData);
+          if (files.length === 0) return false;
+          event.preventDefault();
+          void uploadAndInsert(files); // uploadDocImage(file) → editor.setImage({ src: url })
+          return true;
         },
       },
     });
@@ -264,31 +263,28 @@ export const DocEditor = forwardRef<DocEditorHandle, Props>(
 
 ### 图片处理
 
-#### 即时显示
-- 粘贴图片 → FileReader 转 base64 → 直接插入编辑器
-- 用户立即看到图片，无需等待上传
+#### 粘贴 / 拖入即上传
+- 粘贴截图或拖入图片文件 → 立即 `POST /api/images` → 编辑器插入 `/api/images/{id}`（`DocEditor.tsx` 的 `handlePaste` / `handleDrop`）
+- 粘贴的富文本（如 Word、网页）里若带 base64 图片，先逐张上传再插入
+- 上传失败时弹出 Toast 提示，不会再把 base64 写进正文
 
-#### 保存时上传
-```tsx
-const processImagesBeforeSave = async (html: string): Promise<string> => {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const images = Array.from(doc.querySelectorAll('img[src^="data:image/"]'));
-  for (const img of images) {
-    const dataUrl = img.getAttribute('src')!;
-    try {
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], 'image.png', { type: blob.type });
-      const url = await uploadDocImage(file); // 上传到后端
-      img.setAttribute('src', url);
-    } catch {
-      // 上传失败保持 data: URI
-    }
-  }
-  return doc.body.innerHTML;
-};
-```
+### 粘贴处理（移植自 AI Knowledge Vault）
+
+工具栏右侧的 **粘贴为：自动 / 富文本 / Markdown** 决定粘贴内容怎么解析（全局记忆在 localStorage `stock-card-paste-mode`，所有编辑器同步）：
+- **自动**：剪贴板纯文本里有代码块（`` ``` ``）（或只有纯文本 Markdown 源码）时按 Markdown 渲染，否则保留粘贴的富文本格式；粘贴后右下角提示可一键 **重新解析为 Markdown / 富文本**
+- **富文本**：原样保留剪贴板 HTML；**Markdown**：总是按纯文本 Markdown 渲染（不会带进来源网页多余的空行）
+- Copilot 回答里的 KaTeX 公式粘贴时直接变成公式节点；文本里的 `$…$` 不会在粘贴时自动转换
+
+工具栏 **⋯** 菜单（每项都是一步可撤销）：
+- **渲染代码块**：把刚粘贴的 Copilot 回答里的伪代码块（一行一个 `<div>`）变成真正的代码块
+- **渲染公式**：把文中字面的 `$…$` / `$$…$$` 变成公式，跳过 `$5`、`$5 to $10` 这类价格
+- **修复损坏的代码块**：修复 Copilot「Plain Text」卡片粘贴后变成一行乱码的代码块
+- **图片转为 Markdown**：AI 回答里的 Markdown 卡片截图（粘贴时已记下其源码，存于 `data-markdown-source`）换成 Markdown 代码块
+
+实现位于 `src/editor/paste/`（纯函数，带单测），`src/editor/paste/__fixtures__/` 是真实剪贴板样本的回归用例（`npx vitest run src/editor/paste/fixtures`，新增样本时加 `-u` 生成 `expected.html` 并人工检查）。
+
+#### 保存前兜底
+`src/shared/imageUpload.ts` 的 `replaceDataImages` 会把仍残留的 `data:image/...` 上传并替换（日志中心保存时调用）。历史数据中的 base64 图片由 Flyway 迁移 `V3__Extract_inline_images` 一次性转存。
 
 #### 后端存储
 ```java
@@ -379,7 +375,7 @@ public class ImageController {
 ### 优势
 
 1. **用户体验**: 所见即所得，像 Notion 一样
-2. **图片处理**: 粘贴即显示，保存时自动上传
+2. **图片处理**: 粘贴/拖入即上传，正文只保存图片 URL
 3. **性能**: 轻量级，响应迅速
 4. **扩展性**: 支持自定义扩展和插件
 5. **兼容性**: 向后兼容旧的 Markdown 内容

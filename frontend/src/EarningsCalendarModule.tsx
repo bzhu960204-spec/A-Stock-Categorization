@@ -6,6 +6,7 @@ import {
   getEarningsCalendar, getEarningsNote, saveEarningsNote, earningsRefreshStreamUrl,
   getErrorMessage, type EarningsEntry, type EarningsCalendarData,
 } from './api';
+import { useToast } from './shared/ui/feedback/useFeedback';
 import './EarningsCalendarModule.css';
 
 const WEEKDAYS_CN = ['日', '一', '二', '三', '四', '五', '六'];
@@ -83,8 +84,8 @@ const PREVIEW_STYLE = `
   .doc tr:nth-child(even) td { background:var(--stripe); }
 `;
 
-/** 把笔记 HTML 包成独立文档，在新标签页打开（固定白底阅读模式）。 */
-function openHtmlPreview(title: string, html: string) {
+/** 把笔记 HTML 包成独立文档，在新标签页打开（固定白底阅读模式）。返回 false 表示弹窗被拦截。 */
+function openHtmlPreview(title: string, html: string): boolean {
   const body = html && html.trim() ? html : '<p><em>（空）</em></p>';
   const doc = `<!DOCTYPE html><html data-theme="light"><head>`
     + `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">`
@@ -94,10 +95,10 @@ function openHtmlPreview(title: string, html: string) {
   const win = window.open(url, '_blank');
   if (!win) {
     URL.revokeObjectURL(url);
-    alert('浏览器拦截了新窗口，请允许本站的弹出窗口后重试');
-    return;
+    return false;
   }
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+  return true;
 }
 
 // ── note modal ──────────────────────────────────────────────────────────────
@@ -109,6 +110,7 @@ interface NoteModalProps {
 }
 
 function NoteModal({ ticker, date, onClose }: NoteModalProps) {
+  const toast = useToast();
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -151,7 +153,7 @@ function NoteModal({ ticker, date, onClose }: NoteModalProps) {
         <div className="ec-modal-header">
           <span>{titleText}</span>
           <div className="ec-modal-header-actions">
-            <button className="cal-btn cal-btn-ghost cal-btn-sm" onClick={() => openHtmlPreview(titleText, content)} title="在新标签页以 HTML 预览">🔗 新页面预览</button>
+            <button className="cal-btn cal-btn-ghost cal-btn-sm" onClick={() => { if (!openHtmlPreview(titleText, content)) toast.error('浏览器拦截了新窗口，请允许本站的弹出窗口后重试'); }} title="在新标签页以 HTML 预览">🔗 新页面预览</button>
             <button className="cal-btn cal-btn-ghost cal-btn-sm" onClick={() => setFull(f => !f)} title={full ? '退出全屏' : '全屏编辑'}>{full ? '⤡ 退出全屏' : '⤢ 全屏'}</button>
             <button className="cal-modal-close" onClick={onClose}>✕</button>
           </div>

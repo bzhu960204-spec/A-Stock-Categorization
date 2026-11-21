@@ -1,0 +1,11 @@
+{
+  "description": "Copilot \"Plain Text\" card holding a ```markdown fence: its HTML eats the fences as inline-code delimiters and puts the lines' own escaped <div><span> markup inside one <code>. Pasted as Rich it lands as a garbled inline code run; \"Fix broken code blocks\" (not \"Render code blocks\", which must stay disabled for it) restores the fenced text as a code block.",
+  "mode": "rich",
+  "menu": {
+    "fix-broken-code": "修复 1 个损坏的代码块",
+    "render-copilot-code": "disabled"
+  },
+  "actions": [
+    "fix-broken-code"
+  ]
+}

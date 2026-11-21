@@ -1,0 +1,10 @@
+{
+  "description": "Copilot \"Markdown\" card: the HTML has only a bare screenshot <img> where the card was; the plain text has the card's Markdown source unfenced between the surrounding sentences. The paste tags the image with that source, and \"Convert images to Markdown\" replaces it with a markdown code block.",
+  "mode": "rich",
+  "menu": {
+    "convert-card-images": "将 1 张图片转为 Markdown"
+  },
+  "actions": [
+    "convert-card-images"
+  ]
+}

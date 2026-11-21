@@ -48,6 +48,17 @@ class StockControllerTest {
     }
 
     @Test
+    void oversizedJsonBodyIsRejectedWith413BeforeReachingTheController() throws Exception {
+        String hugeNotes = "x".repeat(10 * 1024 * 1024 + 1);
+        mvc.perform(post("/api/stocks").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"600519\",\"name\":\"MT\",\"notes\":\"" + hugeNotes + "\"}"))
+                .andExpect(status().isPayloadTooLarge())
+                .andExpect(jsonPath("$.message", containsString("请求内容过大")));
+
+        verify(stockService, never()).create(any());
+    }
+
+    @Test
     void researchValueForUnknownStockIs404() throws Exception {
         when(stockService.updateResearchValue(eq(42L), eq(3))).thenReturn(Optional.empty());
 

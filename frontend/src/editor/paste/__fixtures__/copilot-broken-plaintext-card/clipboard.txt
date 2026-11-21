@@ -1,0 +1,8 @@
+Wrap the snippet in a fenced block:
+
+```markdown
+# Title
+Some **bold** text
+```
+
+The renderer then shows it as code.

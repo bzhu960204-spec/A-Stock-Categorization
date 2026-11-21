@@ -1,0 +1,6 @@
+The area is πr2\pi r^2, in Python:
+
+```python
+import math
+area = math.pi * r ** 2
+```

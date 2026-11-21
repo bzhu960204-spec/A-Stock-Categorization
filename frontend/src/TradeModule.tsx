@@ -12,14 +12,18 @@ import { printDocument } from './printExport';
 import {
   getTradeCategories, createTradeCategory, updateTradeCategory, deleteTradeCategory,
   getTrades, searchTrades, createTrade, updateTrade, updateTradeRating, deleteTrade,
+  getErrorMessage,
   type TradeCategory, type Trade,
 } from './api';
+import { useConfirm, useToast } from './shared/ui/feedback/useFeedback';
 
 interface TradeModuleProps {
   onGoHome: () => void;
 }
 
 export default function TradeModule({ onGoHome }: TradeModuleProps) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [categories, setCategories] = useState<TradeCategory[]>([]);
   const [trades, setTrades] = useState<Trade[]>([]);
   const [loading, setLoading] = useState(true);
@@ -149,7 +153,7 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
   };
 
   const handleDeleteCat = async (cat: TradeCategory) => {
-    if (!window.confirm(`确定删除分类「${cat.name}」？该分类下有记录时无法删除。`)) return;
+    if (!await confirm({ message: `确定删除分类「${cat.name}」？该分类下有记录时无法删除。`, confirmText: '删除', danger: true })) return;
     try {
       await deleteTradeCategory(cat.id);
       if (filter === cat.id) setFilter(null);
@@ -157,9 +161,9 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 409) {
-        alert(`无法删除「${cat.name}」，请先移除该分类下的所有交易记录。`);
+        toast.error(`无法删除「${cat.name}」，请先移除该分类下的所有交易记录。`);
       } else {
-        alert('删除失败，请重试。');
+        toast.error(getErrorMessage(err, '删除失败，请重试。'));
       }
     }
   };
@@ -241,8 +245,13 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
 
   const handleDelete = async (trade: Trade, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(`确定删除「${trade.title}」？`)) return;
-    await deleteTrade(trade.id);
+    if (!await confirm({ message: `确定删除「${trade.title}」？`, confirmText: '删除', danger: true })) return;
+    try {
+      await deleteTrade(trade.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err, '删除失败，请重试。'));
+      return;
+    }
     await loadTrades();
     if (modalTrade?.id === trade.id) closeModal();
   };
@@ -254,7 +263,7 @@ export default function TradeModule({ onGoHome }: TradeModuleProps) {
       const res = await updateTradeRating(trade.id, newRating);
       setTrades(prev => prev.map(t => t.id === trade.id ? res.data : t));
       if (modalTrade?.id === trade.id) setModalTrade(res.data);
-    } catch (err) { console.error(err); }
+    } catch (err) { toast.error(getErrorMessage(err, '评分保存失败')); }
   };
 
   const stripHtml = (html: string) =>

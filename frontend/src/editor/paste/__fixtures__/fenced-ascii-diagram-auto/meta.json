@@ -1,0 +1,4 @@
+{
+  "description": "An answer with an ASCII diagram in a fenced code block. The clipboard HTML collapses the alignment spaces; Auto sees the fence and renders the plain-text Markdown instead, so the diagram keeps its columns.",
+  "mode": "auto"
+}

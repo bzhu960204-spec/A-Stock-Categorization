@@ -1,0 +1,4 @@
+{
+  "description": "Raw .md source with no HTML flavor (e.g. copied from a text editor). Auto renders the Markdown itself (heading, list, bold) and offers to re-parse as rich text.",
+  "mode": "auto"
+}

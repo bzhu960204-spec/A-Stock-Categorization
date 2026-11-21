@@ -324,7 +324,7 @@
 | S3 | 移除关闭 TLS 校验的请求 | 🔴 | 0 | ✅ |
 | S4 | 仅本机监听 + prod 关闭 H2 Console | 🟠 | 0 | ✅ |
 | S5 | CORS 配置收敛 | 🟡 | 2 | ✅ 仅 dev profile，读取配置 |
-| S6 | 收紧请求体上限 | 🟡 | 3 | ⬜ |
+| S6 | 收紧请求体上限 | 🟡 | 3 | ✅ JSON 10MB / 上传 20MB |
 | S7 | 导出 HTML 净化 | ⚪ | 4 | ⬜ |
 | D1 | Flyway 迁移 | 🟠 | 2 | ✅ V1 基线 + V2；已用真实库副本验证 |
 | D2 | 数据库备份 | 🟠 | 1 | ✅ |
@@ -341,16 +341,16 @@
 | B9 | 升级 Spring Boot | 🟡 | 4 | ⬜ |
 | B10 | 列表摘要 DTO | ⚪ | 4 | ⬜ |
 | F1 | 修复 ESLint | 🟠 | 1 | ✅ 0 问题，未使用 eslint-disable |
-| F2 | 拆分大组件 / 样式模块化 | 🟠 | 3 | ⬜ |
-| F3 | 路由 + 懒加载 + 分包 | 🟠 | 3 | ⬜ |
-| F4 | TanStack Query | 🟡 | 3 | ⬜ |
-| F5 | 清理冗余依赖 | 🟡 | 3 | ⬜ |
-| F6 | Toast / ConfirmDialog | 🟡 | 3 | ⬜ |
+| F2 | 拆分大组件 / 样式模块化 | 🟠 | 3 | 🔄 股票页、估值模块已拆分；其余模块与 App.css 逐步迁移 |
+| F3 | 路由 + 懒加载 + 分包 | 🟠 | 3 | ✅ 首屏 JS gzip 400KB → 约 93KB |
+| F4 | TanStack Query | 🟡 | 3 | ✅ 股票列表、分类、时间线、估值；其余模块待迁移 |
+| F5 | 清理冗余依赖 | 🟡 | 3 | ✅ |
+| F6 | Toast / ConfirmDialog | 🟡 | 3 | ✅ 已无 window.alert / confirm |
 | F7 | OpenAPI 类型生成 | 🟡 | 4 | ⬜ |
-| F8 | 图片统一上传 | 🟡 | 3 | ⬜ |
+| F8 | 图片统一上传 | 🟡 | 3 | ✅ 含存量迁移 V3 |
 | F9 | 可访问性 | ⚪ | 4 | ⬜ |
-| T1 | 后端测试 | 🔴 | 1 | ✅ 40 个测试（持续补充） |
-| T2 | 前端测试 | 🟠 | 1 | ✅ 21 个纯函数测试（组件测试待补） |
+| T1 | 后端测试 | 🔴 | 1 | ✅ 66 个测试（持续补充） |
+| T2 | 前端测试 | 🟠 | 1 | ✅ 71 个测试（含 hook / 组件测试，jsdom） |
 | T3 | CI | 🟠 | 1 | ✅ GitHub Actions + Dependabot |
 | E1 | README 重写 | 🟡 | 4 | ⬜ |
 | E2 | `.env.example` 补全 | 🟡 | 0 | ✅ |
@@ -430,3 +430,37 @@
 2. 今后修改实体必须同时新增迁移脚本（见 README「数据库结构变更」）。
 3. Flyway 9.22 提示"H2 2.2.224 比其测试过的版本新"，属提示性警告，随阶段 4 升级 Spring Boot 一并解决。
 4. 本机 `backend/data` 是普通目录（并非 OneDrive Junction），库中目前没有数据；若真实数据在其他机器上，首次用新版本启动前，请先运行一次 `backup-db.cmd`。
+
+### 2026-11-21 · 阶段 3：前端重构
+
+| 编号 | 改动 | 涉及文件 |
+|------|------|----------|
+| F5 | 移除未使用的 `@uiw/react-md-editor` 及其样式；`react-markdown` + `remark-gfm` + `remark-breaks` 统一替换为 **marked + DOMPurify** 一套方案（`renderMarkdownSafe` 保持 GFM + 单换行即换行的原语义，且输出经过净化）；`markdownUtils.ts` 并入 `shared/markdown.ts` | `shared/markdown.ts`、`shared/MarkdownView.tsx`、`ProfileModal.tsx`、`IndustryChainModal.tsx`、`DocumentCenterModal.tsx`、`EarningsCalendarModule.tsx`、`DocEditor.tsx`、`printExport.ts`、`App.css` |
+| F3 | 引入 `react-router`：每个模块一个 URL（`/stocks`、`/research`、`/techcycle`、`/ideas`、`/trades`、`/valuation`、`/calendar`、`/earnings-calendar`、`/archive`、`/archive/stocks\|reports\|ideas`），未知路径回首页；不再用 `localStorage.activeModule` 记录模块（启动时清理旧值）。所有模块 `React.lazy` 按需加载；Vite 分包 `vendor-react` / `vendor-tiptap` / `vendor-katex` / `vendor-markdown`；新版本发布后旧标签页加载失效 chunk 时自动刷新一次（`chunkReload.ts`） | `Root.tsx`、`main.tsx`、`app/*`、`ArchiveModule.tsx`、`HomePage.tsx`、`vite.config.ts` |
+| F6 | 新增 `FeedbackProvider`（`useToast` / `useConfirm`，CSS Modules）。替换全部 28 处 `window.alert` / `window.confirm`；确认框为 `role="alertdialog"`，Esc / 点遮罩取消，Esc 不会同时关闭下层弹窗。原先只 `console.error` 的失败（股票页各操作、日志中心、档案保存、评分、拖拽移动研报、删除/归档等）改为 Toast 显示后端 `message`（`getErrorMessage`） | `shared/ui/feedback/*`、各模块 |
+| F4 | 引入 TanStack Query。股票列表按筛选条件拆成独立 query key（全部 / 分类筛选 / 搜索 / 归档），**旧关键字的慢请求不会再覆盖新结果**，且被取代的请求会被 abort；写操作后统一更新缓存或失效重取。分类、时间线、估值数据同样改用 Query | `features/stocks/stockQueries.ts`、`features/stocks/useStockData.ts`、`api.ts`、`features/valuation/ValuationModule.tsx` |
+| F2 | `App.tsx`（约 40 个 `useState`）迁移为 `features/stocks/StocksModule.tsx`，抽出 `useStockList` / `useStockCache` / `useCategories` / `useStockTimeline` / `useCategoryManager` / `useBasicInfoEditor` / `useDebouncedValue`。`ValuationModule.tsx` 1363 行 → 约 230 行容器 + 列表 / 对比 / 详情 / 表单 / 导入组件 + 纯函数 `valuationUtils.ts`（筛选、排序、导入校验与合并、模板）。新组件样式使用 CSS Modules；`App.css` 本阶段未做大改 | `features/stocks/*`、`features/valuation/*`、`shared/hooks/*` |
+| F8 | 编辑器粘贴截图 / 拖入图片 → 立即上传 `/api/images`，正文只保存 `/api/images/{id}`；粘贴带 base64 图片的富文本（Word、网页）时先逐张上传再插入；上传失败 Toast 提示。Flyway Java 迁移 `V3__Extract_inline_images` 把存量 19 个富文本字段中的 base64 图片一次性转存到 `stock_images`（相同图片只存一份），日志中心保存前的兜底转换改用共享的 `replaceDataImages` | `DocEditor.tsx`、`shared/imageUpload.ts`、`DocumentCenterModal.tsx`、`backend/.../util/InlineImages.java`、`backend/.../db/migration/V3__Extract_inline_images.java` |
+| S6 | 移除 `max-swallow-size=-1`、`max-http-form-post-size=-1`；新增 `RequestSizeLimitFilter`：非 multipart 请求体超过 `app.request.max-body-size`（10MB）返回 413 + 中文提示；multipart 单文件 20MB / 单请求 21MB（原 100MB） | `application.properties`、`config/RequestSizeLimitFilter.java` |
+| 修复 | 直接打开没有主题选择器的模块（如 `/calendar`）时主题变量未生效、弹窗背景透明：启动时即应用已保存的主题 | `main.tsx` |
+| 修复 | 编辑器连续粘贴两张图片时，第二次粘贴会替换掉刚插入的图片（插入后图片处于选中状态）：插入后光标移到图片之后 | `DocEditor.tsx` |
+
+**体积**：首屏（首页）JS 由 1,339 KB / gzip 400 KB 降为 `index` 33 KB + `vendor-react` 261 KB（gzip 合计约 **93 KB**）；Tiptap（gzip 137 KB）、KaTeX（77 KB）、Markdown（24 KB）只在打开用到它们的模块时加载。
+
+**行为变化（有意为之）**：
+1. 每个模块都有独立 URL，浏览器前进/后退、刷新会停留在当前模块；归档中心的三个子视图也有各自 URL。
+2. 股票页只对搜索关键字做 300ms 防抖，点选分类 / 切换并集交集立即生效（原先所有筛选都等 300ms）。
+3. 删除 / 归档 / 放弃编辑的确认改为应用内对话框（危险操作按钮为红色），不再弹浏览器原生对话框。
+4. 原先静默失败的操作现在会提示错误；新增股票时后端错误（如代码重复 409）直接显示在弹窗内。
+5. 上传文件上限 100MB → 20MB（Idea 附件同样受限）；超过 10MB 的 JSON 请求返回 413。
+6. 编辑器不再把图片以 base64 写入正文。
+
+**验证**：
+- 前端：`npm run lint` 0 问题（无 eslint-disable）、`tsc -b`、`npm test` **71/71**（新增 Feedback 组件、`useStockList` 竞态、`useDebouncedValue`、`stockQueries`、`valuationUtils`、`imageUpload` 等测试，jsdom 环境）、`npm run build` 通过。
+- 后端：`mvn test` **66/66**（新增 `InlineImagesTest`、`V3ExtractInlineImagesTest`：在 V2 库中写入含 base64 的股票档案 / 日志后执行 V3，校验图片入库、正文改写、重复图片去重；`StockControllerTest` 新增 413 用例）。
+- 隔离环境冒烟（独立端口 18085/15173 + 临时库，未触碰 dev 进程）：13 个路由（10 个模块 + 归档子视图）逐一打开，无控制台错误、无失败的 API 请求；验证了前进 / 后退 / 刷新 / 未知路径、股票搜索 / 分类并集 / 评分 / 时间线 / 归档与恢复 / 基本信息保存、交易记录删除确认（Esc 取消、409 Toast、确认删除）、日历弹窗上叠加确认框、估值排序 / 筛选 / 悬浮提示 / 对比高亮 / 编辑保存 / JSON 更新模式导入 / 删除、Idea 编辑器粘贴截图 ×2 + 粘贴含 base64 的 HTML + 拖入图片（保存后正文仅含 `/api/images/*`）、日志中心旧 Markdown 渲染；`curl` 验证 11MB JSON 与 21MB 文件均返回 413、小图片上传 200。
+
+**注意事项**：
+1. 本阶段新增 Flyway 迁移 V3，首次用新版本启动会扫描所有富文本字段并转存内嵌图片（数据量大时启动会稍慢一次）。启动前建议先运行一次 `backup-db.cmd`。
+2. 依赖有变化，拉取后请在 `frontend/` 下执行 `npm ci`。
+3. 仍待后续迁移：其余模块（Idea / 交易 / 研报 / 日历等）的数据请求改用 TanStack Query、大组件继续拆分、`App.css` 按组件拆为 CSS Modules。

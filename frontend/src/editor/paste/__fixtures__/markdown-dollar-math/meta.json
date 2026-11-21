@@ -1,0 +1,10 @@
+{
+  "description": "Markdown source with literal $…$ / $$…$$ math and prices. Markdown mode keeps the dollars as text (no automatic conversion); \"Render formulas\" then turns only the real formulas into math nodes and leaves \"$5 and $10\" alone.",
+  "mode": "markdown",
+  "menu": {
+    "convert-formulas": "渲染 3 个公式"
+  },
+  "actions": [
+    "convert-formulas"
+  ]
+}

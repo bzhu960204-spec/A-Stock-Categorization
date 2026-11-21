@@ -1,0 +1,11 @@
+<h3>How the receiver is chosen</h3>
+<p>The rule checks the party role first:</p>
+<pre><code>IF(
+  Party_Role:Code = "CN",
+  F_OrderReceiver(
+    &lt;OrderParty&gt;:sequence:Order
+  )
+)</code></pre>
+<p>Then call it from the mapping:</p>
+<pre><code>map(Order) -&gt; Receiver</code></pre>
+<p>That is all you need.</p>

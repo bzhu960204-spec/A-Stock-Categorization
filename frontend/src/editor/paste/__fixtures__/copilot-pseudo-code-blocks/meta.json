@@ -1,0 +1,11 @@
+{
+  "description": "Copilot rich answer whose code is a run of one-line <div><span> rows between empty paragraphs (not a <pre>). Pasted as Rich, then \"Render code blocks\" turns both runs into real code blocks, keeping indentation and decoding &lt;/&gt;.",
+  "mode": "rich",
+  "menu": {
+    "render-copilot-code": "渲染 2 个代码块",
+    "fix-broken-code": "disabled"
+  },
+  "actions": [
+    "render-copilot-code"
+  ]
+}

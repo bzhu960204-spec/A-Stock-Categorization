@@ -3,6 +3,9 @@ import {
   getMarketEvents, createMarketEvent, updateMarketEvent, deleteMarketEvent,
   type MarketEvent,
 } from './api';
+import { useConfirm } from './shared/ui/feedback/useFeedback';
+
+const DISCARD_MESSAGE = '有未保存的内容，确定要放弃并关闭？';
 
 // ── JSON import types ─────────────────────────────────────────────────────────
 interface ImportEventItem {
@@ -67,6 +70,7 @@ interface EventModalProps {
 }
 
 function EventModal({ initial, onSave, onCancel, title }: EventModalProps) {
+  const confirm = useConfirm();
   const [form, setForm] = useState<EventFormData>(initial);
 
   const set = (key: keyof EventFormData) =>
@@ -80,7 +84,7 @@ function EventModal({ initial, onSave, onCancel, title }: EventModalProps) {
   };
 
   return (
-    <div className="cal-modal-overlay" onClick={() => { if (window.confirm('有未保存的内容，确定要放弃并关闭？')) onCancel(); }}>
+    <div className="cal-modal-overlay" onClick={async () => { if (await confirm({ message: DISCARD_MESSAGE, confirmText: '放弃', danger: true })) onCancel(); }}>
       <div className="cal-modal" onClick={e => e.stopPropagation()}>
         <div className="cal-modal-header">
           <span>{title}</span>
@@ -154,6 +158,7 @@ interface ImportModalProps {
 }
 
 function ImportModal({ onImport, onCancel, importing, error }: ImportModalProps) {
+  const confirm = useConfirm();
   const [text, setText] = useState('');
   const [mode, setMode] = useState<'append' | 'replace'>('append');
 
@@ -164,7 +169,7 @@ function ImportModal({ onImport, onCancel, importing, error }: ImportModalProps)
   };
 
   return (
-    <div className="cal-modal-overlay" onClick={() => { if (window.confirm('有未保存的内容，确定要放弃并关闭？')) onCancel(); }}>
+    <div className="cal-modal-overlay" onClick={async () => { if (await confirm({ message: DISCARD_MESSAGE, confirmText: '放弃', danger: true })) onCancel(); }}>
       <div className="cal-modal cal-modal-wide" onClick={e => e.stopPropagation()}>
         <div className="cal-modal-header">
           <span>导入 JSON 事件</span>

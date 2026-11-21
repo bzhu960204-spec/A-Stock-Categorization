@@ -1,0 +1,4 @@
+{
+  "description": "An answer copied from a rendered Markdown page: the HTML has a loose list (<li><p>) and empty paragraphs, the plain text is clean Markdown. Rich keeps the source's empty paragraphs, which show as extra blank lines; this is why the Markdown mode and the re-parse hint exist.",
+  "mode": "rich"
+}

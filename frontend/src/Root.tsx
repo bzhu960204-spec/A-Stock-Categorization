@@ -5,7 +5,7 @@ import { isArchiveKind, modulePath, type ArchiveKind } from './app/modules';
 
 // Each module is its own chunk, fetched the first time its route is visited.
 const HomePage = lazy(() => import('./HomePage'));
-const StocksModule = lazy(() => import('./App'));
+const StocksModule = lazy(() => import('./features/stocks/StocksModule'));
 const ResearchModule = lazy(() => import('./ResearchModule'));
 const CalendarModule = lazy(() => import('./CalendarModule'));
 const EarningsCalendarModule = lazy(() => import('./EarningsCalendarModule'));

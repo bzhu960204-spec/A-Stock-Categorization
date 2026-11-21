@@ -1,0 +1,9 @@
+The request flow:
+
+```
++--------+     +---------+     +----+
+| client | --> | backend | --> | H2 |
++--------+     +---------+     +----+
+```
+
+Each arrow is one HTTP call.

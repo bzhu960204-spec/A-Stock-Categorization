@@ -1,0 +1,8 @@
+{
+  "description": "Same clipboard as raw-markdown-auto, then the hint's re-parse as rich text: with no HTML on the clipboard this gives the plain text, one paragraph per line.",
+  "mode": "auto",
+  "clipboardFrom": "raw-markdown-auto",
+  "actions": [
+    "reparse"
+  ]
+}

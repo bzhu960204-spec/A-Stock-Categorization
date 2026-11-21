@@ -7,6 +7,7 @@ import {
   getIndustryChains, createIndustryChain, updateIndustryChain, deleteIndustryChain,
   type Stock, type IndustryChain,
 } from './api';
+import { useToast } from './shared/ui/feedback/useFeedback';
 
 interface IndustryChainModalProps {
   stock: Stock;
@@ -15,6 +16,7 @@ interface IndustryChainModalProps {
 }
 
 export function IndustryChainModal({ stock, open, onClose }: IndustryChainModalProps) {
+  const toast = useToast();
   const [industryChains, setIndustryChains] = useState<IndustryChain[]>([]);
   const [loadingChains, setLoadingChains] = useState(false);
   const [chainFormMode, setChainFormMode] = useState<'none' | 'add' | 'edit' | 'json-import'>('none');
@@ -72,7 +74,7 @@ export function IndustryChainModal({ stock, open, onClose }: IndustryChainModalP
     const printHtml = buildChainsPrintHtml(stock, industryChains);
 
     const w = window.open('', '_blank', 'width=900,height=700');
-    if (!w) { alert('请允许弹出窗口以导出 PDF'); return; }
+    if (!w) { toast.error('请允许弹出窗口以导出 PDF'); return; }
     w.document.write(printHtml);
     w.document.close();
     w.focus();

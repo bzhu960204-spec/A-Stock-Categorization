@@ -16,7 +16,9 @@ import {
   updateSectorReportRating, moveSectorReport,
   getArchivedSectorReports, archiveSectorReport, unarchiveSectorReport,
   type Sector, type SectorReport,
+  getErrorMessage,
 } from './api';
+import { useConfirm, useToast } from './shared/ui/feedback/useFeedback';
 
 interface ResearchModuleProps {
   onGoHome: () => void;
@@ -24,6 +26,8 @@ interface ResearchModuleProps {
 }
 
 export default function ResearchModule({ onGoHome, forceArchived }: ResearchModuleProps) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [selectedSector, setSelectedSector] = useState<Sector | null>(null);
   const [reports, setReports] = useState<SectorReport[]>([]);
@@ -145,8 +149,13 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
 
   const handleDeleteArchivedReport = async (report: SectorReport, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(`彻底删除研报「${report.title}」？此操作不可恢复。`)) return;
-    await deleteSectorReport(report.sectorId, report.id);
+    if (!await confirm({ message: `彻底删除研报「${report.title}」？此操作不可恢复。`, confirmText: '彻底删除', danger: true })) return;
+    try {
+      await deleteSectorReport(report.sectorId, report.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err, '删除失败，请重试。'));
+      return;
+    }
     setArchivedReports(prev => prev.filter(r => r.id !== report.id));
   };
 
@@ -183,7 +192,7 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
   };
 
   const handleDeleteSector = async (sector: Sector) => {
-    if (!window.confirm(`确定删除行业「${sector.name}」？此操作不可恢复。`)) return;
+    if (!await confirm({ message: `确定删除行业「${sector.name}」？此操作不可恢复。`, confirmText: '删除', danger: true })) return;
     try {
       await deleteSector(sector.id);
       if (selectedSector?.id === sector.id) setSelectedSector(null);
@@ -191,16 +200,21 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 409) {
-        alert(`无法删除「${sector.name}」，该行业下还有研报，请先删除所有研报后再删除行业。`);
+        toast.error(`无法删除「${sector.name}」，该行业下还有研报，请先删除所有研报后再删除行业。`);
       } else {
-        alert('删除失败，请重试。');
+        toast.error(getErrorMessage(err, '删除失败，请重试。'));
       }
     }
   };
 
   const handleArchiveSector = async (sector: Sector) => {
-    if (!window.confirm(`归档整个行业「${sector.name}」？该行业及其下所有研报都会被归档隐藏。`)) return;
-    await archiveSector(sector.id);
+    if (!await confirm({ message: `归档整个行业「${sector.name}」？该行业及其下所有研报都会被归档隐藏。`, confirmText: '归档' })) return;
+    try {
+      await archiveSector(sector.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err, '归档失败，请重试。'));
+      return;
+    }
     if (selectedSector?.id === sector.id) setSelectedSector(null);
     await loadSectors();
   };
@@ -290,14 +304,19 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
       if (selectedSector) await loadReports(selectedSector.id);
       else await loadAllReports();
     } catch (err) {
-      console.error(err);
+      toast.error(getErrorMessage(err, '移动研报失败'));
     }
   };
 
   const handleDeleteReport = async (report: SectorReport, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(`确定删除研报「${report.title}」？`)) return;
-    await deleteSectorReport(report.sectorId, report.id);
+    if (!await confirm({ message: `确定删除研报「${report.title}」？`, confirmText: '删除', danger: true })) return;
+    try {
+      await deleteSectorReport(report.sectorId, report.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err, '删除失败，请重试。'));
+      return;
+    }
     setReports(prev => prev.filter(r => r.id !== report.id));
     if (modalReport?.id === report.id) closeModal();
   };
@@ -309,7 +328,7 @@ export default function ResearchModule({ onGoHome, forceArchived }: ResearchModu
       const res = await updateSectorReportRating(report.sectorId, report.id, newRating);
       setReports(prev => prev.map(r => r.id === report.id ? res.data : r));
       if (modalReport?.id === report.id) setModalReport(res.data);
-    } catch (err) { console.error(err); }
+    } catch (err) { toast.error(getErrorMessage(err, '评分保存失败')); }
   };
 
   const stripHtml = (html: string) =>

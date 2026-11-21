@@ -1,0 +1,9 @@
+## Steps
+
+- Install the CLI
+- Log in with `vault login`
+- Run **sync**
+
+## Notes
+
+Sync is incremental.

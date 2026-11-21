@@ -15,8 +15,10 @@ import {
   getArchivedIdeas, archiveIdea, unarchiveIdea,
   getIdeaAttachments, uploadIdeaAttachment, deleteIdeaAttachment, getIdeaAttachmentDownloadUrl,
   getIdeaComments, createIdeaComment, updateIdeaComment, deleteIdeaComment,
+  getErrorMessage,
   type IdeaCategory, type Idea, type IdeaAttachment, type IdeaComment,
 } from './api';
+import { useConfirm, useToast } from './shared/ui/feedback/useFeedback';
 
 interface IdeaModuleProps {
   onGoHome: () => void;
@@ -24,6 +26,8 @@ interface IdeaModuleProps {
 }
 
 export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps) {
+  const confirm = useConfirm();
+  const toast = useToast();
   const [categories, setCategories] = useState<IdeaCategory[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,7 +169,7 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
   };
 
   const handleDeleteCat = async (cat: IdeaCategory) => {
-    if (!window.confirm(`确定删除分类「${cat.name}」？该分类下有 Idea 时无法删除。`)) return;
+    if (!await confirm({ message: `确定删除分类「${cat.name}」？该分类下有 Idea 时无法删除。`, confirmText: '删除', danger: true })) return;
     try {
       await deleteIdeaCategory(cat.id);
       if (filter === cat.id) setFilter(null);
@@ -173,9 +177,9 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 409) {
-        alert(`无法删除「${cat.name}」，请先移除该分类下的所有 Idea。`);
+        toast.error(`无法删除「${cat.name}」，请先移除该分类下的所有 Idea。`);
       } else {
-        alert('删除失败，请重试。');
+        toast.error(getErrorMessage(err, '删除失败，请重试。'));
       }
     }
   };
@@ -263,8 +267,13 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
 
   const handleDelete = async (idea: Idea, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(`确定删除「${idea.title}」？`)) return;
-    await deleteIdea(idea.id);
+    if (!await confirm({ message: `确定删除「${idea.title}」？`, confirmText: '删除', danger: true })) return;
+    try {
+      await deleteIdea(idea.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err, '删除失败，请重试。'));
+      return;
+    }
     await loadIdeas();
     if (modalIdea?.id === idea.id) closeModal();
   };
@@ -304,8 +313,13 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
   };
 
   const handleArchiveFolder = async (cat: IdeaCategory) => {
-    if (!window.confirm(`归档整个文件夹「${cat.name}」？该文件夹及其下所有 Idea 都会被归档隐藏。`)) return;
-    await archiveIdeaCategory(cat.id);
+    if (!await confirm({ message: `归档整个文件夹「${cat.name}」？该文件夹及其下所有 Idea 都会被归档隐藏。`, confirmText: '归档' })) return;
+    try {
+      await archiveIdeaCategory(cat.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err, '归档失败，请重试。'));
+      return;
+    }
     if (filter === cat.id) setFilter(null);
     await loadCategories();
     await loadIdeas();
@@ -321,8 +335,13 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
 
   const handleDeleteArchivedIdea = async (idea: Idea, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    if (!window.confirm(`彻底删除「${idea.title}」？此操作不可恢复。`)) return;
-    await deleteIdea(idea.id);
+    if (!await confirm({ message: `彻底删除「${idea.title}」？此操作不可恢复。`, confirmText: '彻底删除', danger: true })) return;
+    try {
+      await deleteIdea(idea.id);
+    } catch (err) {
+      toast.error(getErrorMessage(err, '删除失败，请重试。'));
+      return;
+    }
     setArchivedIdeas(prev => prev.filter(i => i.id !== idea.id));
     if (modalIdea?.id === idea.id) closeModal();
   };
@@ -334,7 +353,7 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
       const res = await updateIdeaRating(idea.id, newRating);
       setIdeas(prev => prev.map(i => i.id === idea.id ? res.data : i));
       if (modalIdea?.id === idea.id) setModalIdea(res.data);
-    } catch (err) { console.error(err); }
+    } catch (err) { toast.error(getErrorMessage(err, '评分保存失败')); }
   };
 
   const stripHtml = (html: string) =>
@@ -383,8 +402,8 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
     try {
       const att = await uploadIdeaAttachment(modalIdea.id, file);
       setAttachments(prev => [att, ...prev]);
-    } catch {
-      alert('附件上传失败，请重试。');
+    } catch (err) {
+      toast.error(getErrorMessage(err, '附件上传失败，请重试。'));
     } finally {
       setUploadingAttachment(false);
       if (attachInputRef.current) attachInputRef.current.value = '';
@@ -419,12 +438,12 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
   };
 
   const handleAttachmentDelete = async (att: IdeaAttachment) => {
-    if (!window.confirm(`确定删除附件「${att.fileName}」？`)) return;
+    if (!await confirm({ message: `确定删除附件「${att.fileName}」？`, confirmText: '删除', danger: true })) return;
     try {
       await deleteIdeaAttachment(att.ideaId, att.id);
       setAttachments(prev => prev.filter(a => a.id !== att.id));
-    } catch {
-      alert('删除附件失败。');
+    } catch (err) {
+      toast.error(getErrorMessage(err, '删除附件失败。'));
     }
   };
 
@@ -617,8 +636,13 @@ export default function IdeaModule({ onGoHome, forceArchived }: IdeaModuleProps)
             setComments(prev => prev.map(c => c.id === id ? res.data : c));
           }}
           onDeleteComment={async (id) => {
-            if (!window.confirm('确定删除该评论？')) return;
-            await deleteIdeaComment(modalIdea.id, id);
+            if (!await confirm({ message: '确定删除该评论？', confirmText: '删除', danger: true })) return;
+            try {
+              await deleteIdeaComment(modalIdea.id, id);
+            } catch (err) {
+              toast.error(getErrorMessage(err, '删除评论失败。'));
+              return;
+            }
             setComments(prev => prev.filter(c => c.id !== id));
           }}
         />

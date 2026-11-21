@@ -1,35 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { isHtmlContent, toEditorHtml } from './shared/markdown';
 import { MarkdownView } from './shared/MarkdownView';
+import { replaceDataImages } from './shared/imageUpload';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
 import {
-  getStockDocuments, createStockDocument, updateStockDocument, deleteStockDocument, uploadDocImage,
+  getStockDocuments, createStockDocument, updateStockDocument, deleteStockDocument,
   getEarningsReports, createEarningsReport, updateEarningsReport, deleteEarningsReport,
+  getErrorMessage,
   type Stock, type StockDocument, type EarningsReport,
 } from './api';
+import { useToast } from './shared/ui/feedback/useFeedback';
 
 type UnifiedDocItem =
   | { kind: 'doc'; data: StockDocument }
   | { kind: 'earnings'; data: EarningsReport };
 
-// Before saving: upload any data: URIs to the backend and replace with real URLs
+// Safety net before saving: content pasted before the editor uploaded images (or by other means)
+// may still carry data: URIs — upload them so only /api/images URLs are stored.
 async function processImagesBeforeSave(html: string): Promise<string> {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const images = Array.from(doc.querySelectorAll('img[src^="data:image/"]'));
-  for (const img of images) {
-    const dataUrl = img.getAttribute('src')!;
-    try {
-      const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], 'image.png', { type: blob.type });
-      const url = await uploadDocImage(file);
-      img.setAttribute('src', url);
-    } catch {
-      // keep data URI if upload fails — document still saves
-    }
-  }
-  return doc.body.innerHTML;
+  return (await replaceDataImages(html)).html;
 }
 
 interface DocumentCenterModalProps {
@@ -38,6 +27,7 @@ interface DocumentCenterModalProps {
 }
 
 export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps) {
+  const toast = useToast();
   const [documents, setDocuments] = useState<StockDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [docViewMode, setDocViewMode] = useState<'list' | 'read' | 'edit' | 'compose' | 'earnings-read' | 'earnings-compose' | 'earnings-edit'>('list');
@@ -100,7 +90,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
         setDocuments(docRes.data);
         setEarningsReports(earningsRes.data);
       } catch (e) {
-        console.error('Failed to load stock documents', e);
+        toast.error(getErrorMessage(e, '加载日志失败'));
         if (cancelled) return;
         setDocuments([]);
         setEarningsReports([]);
@@ -109,7 +99,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
       }
     })();
     return () => { cancelled = true; };
-  }, [stock.id]);
+  }, [stock.id, toast]);
 
   const handleAddDocument = async () => {
     const title = editDocTitle.trim();
@@ -128,8 +118,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
       editDocContentRef.current = '';
       setDocViewMode('list');
     } catch (e) {
-      console.error('Failed to create stock document', e);
-      setDocSaveError('保存失败，请检查后端是否运行');
+      setDocSaveError(getErrorMessage(e, '保存失败，请检查后端是否运行'));
     } finally {
       setSavingDocument(false);
     }
@@ -151,8 +140,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
       setSelectedDocument(res.data);
       setDocViewMode('read');
     } catch (e) {
-      console.error('Failed to update document', e);
-      setDocSaveError('保存失败，请检查后端是否运行');
+      setDocSaveError(getErrorMessage(e, '保存失败，请检查后端是否运行'));
     } finally {
       setSavingDocument(false);
     }
@@ -168,7 +156,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
       setSelectedDocument(null);
       setDocViewMode('list');
     } catch (e) {
-      console.error('Failed to delete document', e);
+      toast.error(getErrorMessage(e, '删除日志失败'));
     } finally {
       setSavingDocument(false);
     }
@@ -192,8 +180,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
       setEarningsReports(prev => [res.data, ...prev]);
       setDocViewMode('list');
     } catch (e) {
-      console.error('Failed to create earnings report', e);
-      setEarningsSaveError('保存失败，请检查后端是否运行');
+      setEarningsSaveError(getErrorMessage(e, '保存失败，请检查后端是否运行'));
     } finally {
       setSavingEarnings(false);
     }
@@ -242,8 +229,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
       setSelectedEarnings(res.data);
       setDocViewMode('earnings-read');
     } catch (e) {
-      console.error('Failed to update earnings report', e);
-      setEarningsSaveError('保存失败，请检查后端是否运行');
+      setEarningsSaveError(getErrorMessage(e, '保存失败，请检查后端是否运行'));
     } finally {
       setSavingEarnings(false);
     }
@@ -259,7 +245,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
       setSelectedEarnings(null);
       setDocViewMode('list');
     } catch (e) {
-      console.error('Failed to delete earnings report', e);
+      toast.error(getErrorMessage(e, '删除财报失败'));
     } finally {
       setSavingEarnings(false);
     }

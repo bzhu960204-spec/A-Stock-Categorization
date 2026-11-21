@@ -4,6 +4,9 @@ import {
   getTechCyclePhases, createTechCyclePhase, updateTechCyclePhase, deleteTechCyclePhase,
   type TechCycle, type TechCyclePhase,
 } from './api';
+import { useConfirm } from './shared/ui/feedback/useFeedback';
+
+const DISCARD_MESSAGE = '有未保存的内容，确定要放弃并关闭？';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -88,6 +91,7 @@ interface PhaseModalProps {
 }
 
 function PhaseModal({ initial, title, onSave, onCancel, onDelete }: PhaseModalProps) {
+  const confirm = useConfirm();
   const [form, setForm] = useState<PhaseFormData>(initial);
 
   const setF = <K extends keyof PhaseFormData>(key: K, val: PhaseFormData[K]) =>
@@ -101,7 +105,7 @@ function PhaseModal({ initial, title, onSave, onCancel, onDelete }: PhaseModalPr
   };
 
   return (
-    <div className="tc-modal-overlay" onClick={() => { if (window.confirm('有未保存的内容，确定要放弃并关闭？')) onCancel(); }}>
+    <div className="tc-modal-overlay" onClick={async () => { if (await confirm({ message: DISCARD_MESSAGE, confirmText: '放弃', danger: true })) onCancel(); }}>
       <div className="tc-modal" onClick={e => e.stopPropagation()}>
         <div className="tc-modal-header">
           <span>{title}</span>
@@ -203,6 +207,7 @@ interface CycleModalProps {
 }
 
 function CycleModal({ initial, title, onSave, onCancel }: CycleModalProps) {
+  const confirm = useConfirm();
   const [form, setForm] = useState(initial);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -212,7 +217,7 @@ function CycleModal({ initial, title, onSave, onCancel }: CycleModalProps) {
   };
 
   return (
-    <div className="tc-modal-overlay" onClick={() => { if (window.confirm('有未保存的内容，确定要放弃并关闭？')) onCancel(); }}>
+    <div className="tc-modal-overlay" onClick={async () => { if (await confirm({ message: DISCARD_MESSAGE, confirmText: '放弃', danger: true })) onCancel(); }}>
       <div className="tc-modal" onClick={e => e.stopPropagation()}>
         <div className="tc-modal-header">
           <span>{title}</span>

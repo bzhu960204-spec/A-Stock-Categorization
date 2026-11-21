@@ -1,0 +1,7 @@
+{
+  "description": "Copilot rich answer with KaTeX (inline and display). The LaTeX is only in <annotation encoding=\"application/x-tex\">; an Auto paste (no code fence in the plain text) turns each formula into a math node instead of glyphs + raw LaTeX glued together.",
+  "mode": "auto",
+  "menu": {
+    "convert-formulas": "disabled"
+  }
+}

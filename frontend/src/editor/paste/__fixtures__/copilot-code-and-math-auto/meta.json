@@ -1,0 +1,4 @@
+{
+  "description": "KNOWN LIMITATION (formula doc, section 4.1): a Copilot answer with both a code fence and KaTeX. Auto sees the fence in the plain text and renders the Markdown, which skips the KaTeX handling, so the formula ends up as glyphs + LaTeX glued together. Pinned as-is; update the snapshot when this is fixed.",
+  "mode": "auto"
+}

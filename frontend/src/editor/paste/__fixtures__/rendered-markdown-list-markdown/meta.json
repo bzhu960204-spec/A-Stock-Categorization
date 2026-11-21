@@ -1,0 +1,5 @@
+{
+  "description": "Same clipboard as rendered-markdown-list-rich, pasted in Markdown mode: the clean plain-text Markdown is rendered, so there are no extra empty paragraphs.",
+  "mode": "markdown",
+  "clipboardFrom": "rendered-markdown-list-rich"
+}

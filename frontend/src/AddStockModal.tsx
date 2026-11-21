@@ -4,7 +4,7 @@ import { useEscapeKey } from './useEscapeKey';
 import {
   createStock, setStockCategories,
   lookupStock, lookupStockSuggest, lookupUsStock, lookupUsStockSuggest,
-  lookupGlobalStock, lookupGlobalStockSuggest,
+  lookupGlobalStock, lookupGlobalStockSuggest, getErrorMessage,
   type Category, type LookupSuggestion,
 } from './api';
 
@@ -135,7 +135,7 @@ export function AddStockModal({ open, categories, initialCategoryIds, onClose, o
       onCreated();
       onClose();
     } catch (e) {
-      console.error('Failed to add stock', e);
+      setAddStockError(getErrorMessage(e, '添加失败，请重试'));
     }
   };
 

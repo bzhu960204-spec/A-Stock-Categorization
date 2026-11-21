@@ -3,7 +3,8 @@ import { MarkdownView } from './shared/MarkdownView';
 import { MarkdownEditor } from './MarkdownEditor';
 import { IndustryChainModal } from './IndustryChainModal';
 import { useEscapeKey } from './useEscapeKey';
-import { updateStock, type Stock } from './api';
+import { getErrorMessage, updateStock, type Stock } from './api';
+import { useToast } from './shared/ui/feedback/useFeedback';
 
 interface ProfileModalProps {
   stock: Stock;
@@ -38,6 +39,7 @@ function draftFromStock(stock: Stock): ProfileDraft {
 }
 
 export function ProfileModal({ stock, onClose, onSaved }: ProfileModalProps) {
+  const toast = useToast();
   const [profileMode, setProfileMode] = useState<'read' | 'edit'>('read');
   const [profileActiveSection, setProfileActiveSection] = useState('business');
   const [savingProfile, setSavingProfile] = useState(false);
@@ -136,7 +138,7 @@ export function ProfileModal({ stock, onClose, onSaved }: ProfileModalProps) {
       setProfileMode('read');
       setProfileDraft(draftFromStock(res.data));
     } catch (e) {
-      console.error('Failed to save company profile', e);
+      toast.error(getErrorMessage(e, '保存公司档案失败，请重试'));
     } finally {
       setSavingProfile(false);
     }

@@ -1,0 +1,3 @@
+A quadratic ax2+bx+c=0ax^2+bx+c=0 with a≠0a\neq 0 has the roots
+x=−b±b2−4ac2ax=\frac{-b\pm\sqrt{b^2-4ac}}{2a}
+The sign of the discriminant decides how many real roots there are.

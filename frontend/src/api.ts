@@ -14,7 +14,8 @@ export function getErrorMessage(err: unknown, fallback = '操作失败，请稍�
 API.interceptors.response.use(
   (res) => res,
   (error: AxiosError) => {
-    console.error('API error:', error.config?.url, getErrorMessage(error));
+    // Superseded requests (e.g. an older stock search) are aborted on purpose.
+    if (!axios.isCancel(error)) console.error('API error:', error.config?.url, getErrorMessage(error));
     return Promise.reject(error);
   }
 );
@@ -83,7 +84,7 @@ export interface StockDocument {
 }
 
 // Stock APIs
-export const getStocks = () => API.get<Stock[]>('/stocks');
+export const getStocks = (signal?: AbortSignal) => API.get<Stock[]>('/stocks', { signal });
 export const createStock = (stock: Partial<Stock>) => API.post<Stock>('/stocks', stock);
 export const updateStock = (id: number, stock: Partial<Stock>) => API.put<Stock>(`/stocks/${id}`, stock);
 export const updateStockResearchValue = (id: number, researchValue: number) =>
@@ -91,8 +92,8 @@ export const updateStockResearchValue = (id: number, researchValue: number) =>
 export const deleteStock = (id: number) => API.delete(`/stocks/${id}`);
 export const setStockCategories = (id: number, categoryIds: number[]) =>
   API.put<Stock>(`/stocks/${id}/categories`, categoryIds);
-export const getStockTimeline = (id: number) =>
-  API.get<StockTimelineEntry[]>(`/stocks/${id}/timeline`);
+export const getStockTimeline = (id: number, signal?: AbortSignal) =>
+  API.get<StockTimelineEntry[]>(`/stocks/${id}/timeline`, { signal });
 export const getStockDocuments = (id: number) =>
   API.get<StockDocument[]>(`/stocks/${id}/documents`);
 export const createStockDocument = (id: number, payload: Pick<StockDocument, 'title' | 'content' | 'category'>) =>
@@ -109,15 +110,16 @@ export const uploadDocImage = async (file: File): Promise<string> => {
   });
   return res.data.url;
 };
-export const filterStocks = (categoryIds: number[], mode: 'union' | 'intersection') =>
-  API.get<Stock[]>('/stocks/filter', { params: { categoryIds: categoryIds.join(','), mode } });
-export const searchStocks = (keyword: string) => API.get<Stock[]>('/stocks/search', { params: { keyword } });
-export const getArchivedStocks = () => API.get<Stock[]>('/stocks/archived');
+export const filterStocks = (categoryIds: number[], mode: 'union' | 'intersection', signal?: AbortSignal) =>
+  API.get<Stock[]>('/stocks/filter', { params: { categoryIds: categoryIds.join(','), mode }, signal });
+export const searchStocks = (keyword: string, signal?: AbortSignal) =>
+  API.get<Stock[]>('/stocks/search', { params: { keyword }, signal });
+export const getArchivedStocks = (signal?: AbortSignal) => API.get<Stock[]>('/stocks/archived', { signal });
 export const archiveStock = (id: number) => API.patch<Stock>(`/stocks/${id}/archive`);
 export const unarchiveStock = (id: number) => API.patch<Stock>(`/stocks/${id}/unarchive`);
 
 // Category APIs
-export const getCategories = () => API.get<Category[]>('/categories');
+export const getCategories = (signal?: AbortSignal) => API.get<Category[]>('/categories', { signal });
 export const createCategory = (category: Partial<Category>) => API.post<Category>('/categories', category);
 export const updateCategory = (id: number, category: Partial<Category>) => API.put<Category>(`/categories/${id}`, category);
 export const deleteCategory = (id: number) => API.delete(`/categories/${id}`);
