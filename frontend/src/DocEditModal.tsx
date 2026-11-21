@@ -1,5 +1,7 @@
 import type { ReactNode, Ref } from 'react';
 import { DocEditor, type DocEditorHandle } from './DocEditor';
+import { useFullscreen } from './useFullscreen';
+import { FullscreenToggle } from './FullscreenToggle';
 
 interface DocEditModalProps {
   titleValue: string;
@@ -36,9 +38,10 @@ export default function DocEditModal({
   saveLabel, saving, saveError,
   onSave, onCancel, onClose, onDelete, bodyExtra,
 }: Readonly<DocEditModalProps>) {
+  const [fullscreen, toggleFullscreen] = useFullscreen();
   return (
     <div className="rp-modal-overlay">
-      <div className="rp-modal" onClick={e => e.stopPropagation()}>
+      <div className={`rp-modal${fullscreen ? ' is-fullscreen' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="rp-modal-header">
           <div className="rp-modal-header-left rp-modal-edit-meta">
             <input
@@ -68,6 +71,7 @@ export default function DocEditModal({
           </div>
           <div className="rp-modal-header-right">
             {saveError && <span className="doc-save-error">{saveError}</span>}
+            <FullscreenToggle fullscreen={fullscreen} onToggle={toggleFullscreen} />
             {onDelete && (
               <button className="cancel-btn" style={{ color: 'var(--danger)' }}
                 onClick={onDelete} disabled={saving}>删除</button>

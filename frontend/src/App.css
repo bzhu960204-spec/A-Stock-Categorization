@@ -4733,6 +4733,27 @@ body {
   border-radius: 4px;
 }
 
+/* Full-screen reading/editing: the dialog fills the viewport, content stays centred and readable */
+.rp-modal-overlay:has(.rp-modal.is-fullscreen) { padding: 0; }
+.rp-modal.is-fullscreen,
+.glass-modal.document-modal.is-fullscreen {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+.rp-modal.is-fullscreen .rp-modal-read-content {
+  padding-left: max(48px, calc((100% - 1200px) / 2));
+  padding-right: max(48px, calc((100% - 1200px) / 2));
+}
+.document-modal.is-fullscreen .doc-read-scroll {
+  padding-left: max(32px, calc((100% - 1200px) / 2));
+  padding-right: max(32px, calc((100% - 1200px) / 2));
+}
+
 .rp-modal-editor-wrap {
   flex: 1;
   overflow: hidden;

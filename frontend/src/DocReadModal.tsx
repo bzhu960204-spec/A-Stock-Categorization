@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { DocEditor } from './DocEditor';
 import { useEscapeKey } from './useEscapeKey';
+import { useFullscreen } from './useFullscreen';
+import { FullscreenToggle } from './FullscreenToggle';
 
 interface DocReadModalProps {
   title: ReactNode;
@@ -32,6 +34,7 @@ export default function DocReadModal({
   onExportPdf, onEdit, headerExtra, onClose, bodyExtra, scrollBody,
 }: Readonly<DocReadModalProps>) {
   useEscapeKey(onClose);
+  const [fullscreen, toggleFullscreen] = useFullscreen();
 
   const readContent = (
     <div className="rp-modal-read-content doc-read-view">
@@ -41,7 +44,7 @@ export default function DocReadModal({
 
   return (
     <div className="rp-modal-overlay" onClick={onClose}>
-      <div className="rp-modal" onClick={e => e.stopPropagation()}>
+      <div className={`rp-modal${fullscreen ? ' is-fullscreen' : ''}`} onClick={e => e.stopPropagation()}>
         <div className="rp-modal-header">
           <div className="rp-modal-header-left">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -66,6 +69,7 @@ export default function DocReadModal({
             </div>
           </div>
           <div className="rp-modal-header-right">
+            <FullscreenToggle fullscreen={fullscreen} onToggle={toggleFullscreen} />
             {onExportPdf && <button className="icon-btn" onClick={onExportPdf} title="导出为 PDF">⬇ 导出PDF</button>}
             {onEdit && <button className="icon-btn" onClick={onEdit}>✎ 编辑</button>}
             {headerExtra}

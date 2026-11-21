@@ -10,6 +10,8 @@ import {
   type Stock, type StockDocument, type EarningsReport,
 } from './api';
 import { useToast } from './shared/ui/feedback/useFeedback';
+import { useFullscreen } from './useFullscreen';
+import { FullscreenToggle } from './FullscreenToggle';
 
 type UnifiedDocItem =
   | { kind: 'doc'; data: StockDocument }
@@ -31,6 +33,9 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
   const [documents, setDocuments] = useState<StockDocument[]>([]);
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [docViewMode, setDocViewMode] = useState<'list' | 'read' | 'edit' | 'compose' | 'earnings-read' | 'earnings-compose' | 'earnings-edit'>('list');
+  // Full-screen only applies to reading/editing; the list keeps the compact dialog.
+  const [fullscreenPref, toggleFullscreen] = useFullscreen(docViewMode !== 'list');
+  const fullscreen = fullscreenPref && docViewMode !== 'list';
   const [selectedDocument, setSelectedDocument] = useState<StockDocument | null>(null);
   const [editDocTitle, setEditDocTitle] = useState('');
   const [editDocContent, setEditDocContent] = useState('');
@@ -283,7 +288,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
 
   return (
     <div className="modal-overlay" onClick={closeGuarded}>
-      <div className="glass-modal document-modal" onClick={e => e.stopPropagation()}>
+      <div className={`glass-modal document-modal${fullscreen ? ' is-fullscreen' : ''}`} onClick={e => e.stopPropagation()}>
 
         {/* ---- List View ---- */}
         {docViewMode === 'list' && (
@@ -416,6 +421,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
             <div className="doc-modal-header">
               <button className="doc-back-btn" onClick={() => setDocViewMode('list')}>‹ 返回列表</button>
               <div className="doc-read-actions">
+                <FullscreenToggle className="doc-action-edit" fullscreen={fullscreen} onToggle={toggleFullscreen} />
                 <button className="doc-action-edit" onClick={() => {
                   const html = toEditorHtml(selectedDocument.content);
                   setEditDocTitle(selectedDocument.title);
@@ -519,6 +525,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
               </div>
               <div className="rp-modal-header-right">
                 {docSaveError && <span className="doc-save-error" style={{ flex: 'unset' }}>{docSaveError}</span>}
+                <FullscreenToggle className="cancel-btn" fullscreen={fullscreen} onToggle={toggleFullscreen} />
                 <button className="cancel-btn" onClick={() => {
                   if (docViewMode === 'edit') setDocViewMode('read');
                   else setDocViewMode('list');
@@ -552,6 +559,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
             <div className="doc-modal-header">
               <button className="doc-back-btn" onClick={() => setDocViewMode('list')}>‹ 返回列表</button>
               <div className="doc-read-actions">
+                <FullscreenToggle className="doc-action-edit" fullscreen={fullscreen} onToggle={toggleFullscreen} />
                 <button className="doc-action-edit" onClick={() => openEarningsEdit(selectedEarnings)}>编辑</button>
                 <button className="doc-action-delete" onClick={() => setPendingDeleteEarnings(selectedEarnings)}>删除</button>
               </div>
@@ -668,6 +676,7 @@ export function DocumentCenterModal({ stock, onClose }: DocumentCenterModalProps
               </div>
               <div className="rp-modal-header-right">
                 {earningsSaveError && <span className="doc-save-error" style={{ flex: 'unset' }}>{earningsSaveError}</span>}
+                <FullscreenToggle className="cancel-btn" fullscreen={fullscreen} onToggle={toggleFullscreen} />
                 <button className="cancel-btn" onClick={() => {
                   if (docViewMode === 'earnings-edit') setDocViewMode('earnings-read');
                   else setDocViewMode('list');
