@@ -1,0 +1,9 @@
+{ "refRates": [
+  { "effectiveDate": "2026-11-19", "type": "SOFR", "percentRate": 3.91, "percentPercentile1": 3.85,
+    "percentPercentile25": 3.88, "percentPercentile75": 3.95, "percentPercentile99": 3.98,
+    "volumeInBillions": 3161, "revisionIndicator": "" },
+  { "effectiveDate": "2018-04-02", "type": "SOFR", "percentRate": 1.83, "volumeInBillions": 1065, "revisionIndicator": "" },
+  { "effectiveDate": "2026-11-19", "type": "TGCR", "percentRate": 3.88, "percentPercentile99": 3.93,
+    "volumeInBillions": 1800, "revisionIndicator": "" },
+  { "effectiveDate": "2026-11-19", "type": "BGCR", "percentRate": 3.89, "revisionIndicator": "" }
+] }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ThemePicker } from './ThemePicker';
 import type { ModuleId } from './app/modules';
-import { getConfig, saveConfig, type AppConfig } from './api';
+import { getConfig, saveConfig, type AppConfig, type KeySource } from './api';
+import { useQeUnreadCount } from './features/liquidity/liquidityQueries';
 
 interface Module {
   id: ModuleId;
@@ -42,6 +43,26 @@ const MODULE_GROUPS: ModuleGroup[] = [
         labelEn: 'TECH CYCLE',
         description: '记录不同技术与板块的发展周期与趋势时间线',
         icon: '⏱',
+      },
+    ],
+  },
+  {
+    groupLabel: '宏观监测',
+    groupLabelEn: 'MACRO',
+    modules: [
+      {
+        id: 'liquidity',
+        label: '美元流动性监测',
+        labelEn: 'LIQUIDITY MONITOR',
+        description: '追踪 SOFR、IORB、准备金、逆回购、TGA 等美元流动性指标，生成趋势图与周报',
+        icon: '💧',
+      },
+      {
+        id: 'market-valuation',
+        label: '美股估值监测',
+        labelEn: 'MARKET VALUATION',
+        description: '追踪 CAPE、巴菲特指标、股权风险溢价、远期 PE 与指数盈利能力，判断美股估值冷热',
+        icon: '🌡️',
       },
     ],
   },
@@ -114,11 +135,14 @@ interface HomePageProps {
 export default function HomePage({ onSelectModule }: HomePageProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState('');
+  const [fredKey, setFredKey] = useState('');
   const [apiKeyStatus, setApiKeyStatus] = useState<AppConfig | null>(null);
   const [apiKeySaving, setApiKeySaving] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
   const [apiKeyError, setApiKeyError] = useState('');
   const settingsRef = useRef<HTMLDivElement>(null);
+  // A failed request just means no badge.
+  const unreadAlerts = useQeUnreadCount().data ?? 0;
 
   const loadConfig = useCallback(() => {
     getConfig().then(res => setApiKeyStatus(res.data)).catch(() => {});
@@ -141,14 +165,15 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
     return () => document.removeEventListener('mousedown', handler);
   }, [showSettings]);
 
-  // An empty value clears the key saved from the UI (falls back to .env).
-  const persistApiKey = async (value: string) => {
+  // A key that is left out stays untouched; an empty value clears the key saved from the UI (falls back to .env).
+  const persistApiKeys = async (payload: { twelvedataApiKey?: string; fredApiKey?: string }) => {
     setApiKeySaving(true);
     setApiKeyError('');
     setApiKeySaved(false);
     try {
-      await saveConfig({ twelvedataApiKey: value });
-      setApiKey('');
+      await saveConfig(payload);
+      if (payload.twelvedataApiKey !== undefined) setApiKey('');
+      if (payload.fredApiKey !== undefined) setFredKey('');
       setApiKeySaved(true);
       setTimeout(() => setApiKeySaved(false), 2500);
       loadConfig();
@@ -159,14 +184,19 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
     }
   };
 
-  const handleSaveSettings = () => persistApiKey(apiKey.trim());
-  const handleClearApiKey = () => persistApiKey('');
+  const handleSaveSettings = () => persistApiKeys({
+    ...(apiKey.trim() ? { twelvedataApiKey: apiKey.trim() } : {}),
+    ...(fredKey.trim() ? { fredApiKey: fredKey.trim() } : {}),
+  });
 
-  const apiKeyStatusText = !apiKeyStatus
-    ? ''
-    : apiKeyStatus.twelvedataApiKeyConfigured
-      ? `当前：${apiKeyStatus.twelvedataApiKeyMasked}（${apiKeyStatus.twelvedataApiKeySource === 'DATABASE' ? '界面保存' : '.env / 环境变量'}）`
-      : '当前：未配置';
+  const keyStatusText = (configured: boolean | undefined, masked: string | undefined, source: KeySource | undefined) =>
+    configured === undefined
+      ? ''
+      : configured
+        ? `当前：${masked}（${source === 'DATABASE' ? '界面保存' : '.env / 环境变量'}）`
+        : '当前：未配置';
+  const apiKeyStatusText = keyStatusText(apiKeyStatus?.twelvedataApiKeyConfigured, apiKeyStatus?.twelvedataApiKeyMasked, apiKeyStatus?.twelvedataApiKeySource);
+  const fredKeyStatusText = keyStatusText(apiKeyStatus?.fredApiKeyConfigured, apiKeyStatus?.fredApiKeyMasked, apiKeyStatus?.fredApiKeySource);
 
   return (
     <div className="app-container">
@@ -207,18 +237,45 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
             </span>
           </div>
           <div className="home-settings-row">
+            <label className="home-settings-label">FRED API Key</label>
+            <div className="home-settings-input-row">
+              <input
+                className="home-settings-input"
+                type="password"
+                autoComplete="off"
+                value={fredKey}
+                onChange={e => { setFredKey(e.target.value); setApiKeySaved(false); setApiKeyError(''); }}
+                placeholder={apiKeyStatus?.fredApiKeyConfigured ? '输入新 Key 以替换当前值' : '输入你的 FRED API Key'}
+                spellCheck={false}
+              />
+            </div>
+            {fredKeyStatusText && <span className="home-settings-hint">{fredKeyStatusText}</span>}
+            <span className="home-settings-hint">
+              用于美元流动性监测（IORB、准备金、银行总资产等）与美股估值监测（GDP、实际利率等）。免费申请：
+              <a href="https://fredaccount.stlouisfed.org/apikeys" target="_blank" rel="noreferrer">fredaccount.stlouisfed.org</a>
+            </span>
+          </div>
+          <div className="home-settings-row">
             <button
               className="confirm-btn"
               onClick={handleSaveSettings}
-              disabled={apiKeySaving || !apiKey.trim()}
+              disabled={apiKeySaving || (!apiKey.trim() && !fredKey.trim())}
             >{apiKeySaving ? '保存中…' : '保存全部'}</button>
             {apiKeyStatus?.twelvedataApiKeySource === 'DATABASE' && (
               <button
                 className="cancel-btn"
-                onClick={handleClearApiKey}
+                onClick={() => persistApiKeys({ twelvedataApiKey: '' })}
                 disabled={apiKeySaving}
                 title="删除界面保存的 Key，改用 .env 中的配置"
-              >清除已保存</button>
+              >清除 Twelve Data</button>
+            )}
+            {apiKeyStatus?.fredApiKeySource === 'DATABASE' && (
+              <button
+                className="cancel-btn"
+                onClick={() => persistApiKeys({ fredApiKey: '' })}
+                disabled={apiKeySaving}
+                title="删除界面保存的 Key，改用 .env 中的配置"
+              >清除 FRED</button>
             )}
             {apiKeySaved && <span className="home-settings-ok">✓ 已保存</span>}
             {apiKeyError && <span className="home-settings-err">{apiKeyError}</span>}
@@ -242,7 +299,14 @@ export default function HomePage({ onSelectModule }: HomePageProps) {
                     className="home-nav-row"
                     onClick={() => onSelectModule(mod.id)}
                   >
-                    <span className="home-nav-icon">{mod.icon}</span>
+                    <span className="home-nav-icon">
+                      {mod.icon}
+                      {mod.id === 'liquidity' && unreadAlerts > 0 && (
+                        <span className="home-nav-badge" title={`${unreadAlerts} 条未读放水雷达提醒`}>
+                          {unreadAlerts > 99 ? '99+' : unreadAlerts}
+                        </span>
+                      )}
+                    </span>
                     <span className="home-nav-label">{mod.label}</span>
                     <span className="home-nav-label-en">{mod.labelEn}</span>
                     <span className="home-nav-desc">{mod.description}</span>

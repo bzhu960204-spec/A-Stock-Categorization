@@ -15,6 +15,7 @@ export default defineConfig({
           groups: [
             { name: 'vendor-tiptap', test: /node_modules[\\/](@tiptap|prosemirror-|@floating-ui|linkifyjs|orderedmap|rope-sequence|w3c-keyname|fast-deep-equal)/, priority: 10 },
             { name: 'vendor-katex', test: /node_modules[\\/]katex[\\/]/, priority: 30 },
+            { name: 'vendor-echarts', test: /node_modules[\\/](echarts|zrender)[\\/]/, priority: 30 },
             { name: 'vendor-markdown', test: /node_modules[\\/](marked|dompurify)[\\/]/, priority: 30 },
             { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler|react-router|cookie|set-cookie-parser)[\\/]/, priority: 40 },
           ],

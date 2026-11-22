@@ -1,0 +1,16 @@
+{ "ambs": { "auctions": [
+  { "auctionStatus": "Results", "operationId": "a1", "operationDate": "2020-03-31", "operationType": "Outright TBA Purchase",
+    "operationDirection": "P", "totalAmtAcceptedPar": "7115000000" },
+  { "auctionStatus": "Results", "operationId": "a2", "operationDate": "2026-11-18", "operationType": "Outright Specified Pool Sale",
+    "operationDirection": "S", "totalAmtAcceptedPar": "" },
+  { "auctionStatus": "Results", "operationId": "a3", "operationDate": "2026-11-12", "operationType": "Coupon Swap",
+    "operationDirection": "", "totalAmtAcceptedPar": "20000000" },
+  { "auctionStatus": "Results", "operationId": "a4", "operationDate": "2026-11-10", "operationType": "Dollar Roll",
+    "operationDirection": "", "totalAmtAcceptedPar": "20000000" },
+  { "auctionStatus": "Results", "operationId": "a5", "operationDate": "2020-04-01", "operationType": "Outright TBA Purchase",
+    "operationDirection": "P", "totalAmtAcceptedPar": "3000000000" },
+  { "auctionStatus": "Results", "operationId": "a6", "operationDate": "2020-04-01", "operationType": "Outright Specified Pool Sale",
+    "operationDirection": "S", "totalAmtAcceptedPar": "1000000000" },
+  { "auctionStatus": "Results", "operationId": "a7", "operationDate": "2020-04-02", "operationType": "Outright TBA Purchase",
+    "operationDirection": "P", "totalAmtAcceptedPar": "30000000" }
+] } }

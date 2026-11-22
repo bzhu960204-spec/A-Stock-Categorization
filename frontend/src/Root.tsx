@@ -13,6 +13,8 @@ const TechCycleModule = lazy(() => import('./TechCycleModule'));
 const IdeaModule = lazy(() => import('./IdeaModule'));
 const TradeModule = lazy(() => import('./TradeModule'));
 const ValuationModule = lazy(() => import('./features/valuation/ValuationModule'));
+const LiquidityModule = lazy(() => import('./features/liquidity/LiquidityModule'));
+const MarketValuationModule = lazy(() => import('./features/market-valuation/MarketValuationModule'));
 const ArchiveModule = lazy(() => import('./ArchiveModule'));
 
 function useNavigateTo(path: string) {
@@ -58,6 +60,8 @@ export default function Root() {
         <Route path="/ideas" element={<ModuleRoute component={IdeaModule} />} />
         <Route path="/trades" element={<ModuleRoute component={TradeModule} />} />
         <Route path="/valuation" element={<ModuleRoute component={ValuationModule} />} />
+        <Route path="/liquidity" element={<ModuleRoute component={LiquidityModule} />} />
+        <Route path="/market-valuation" element={<ModuleRoute component={MarketValuationModule} />} />
         <Route path="/archive" element={<ArchiveRoute />} />
         <Route path="/archive/:kind" element={<ArchiveRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />

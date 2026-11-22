@@ -247,6 +247,8 @@ export interface MarketEvent {
 
 export const getMarketEvents = (year: number, month: number) =>
   API.get<MarketEvent[]>('/market-events', { params: { year, month } });
+export const getMarketEventsInRange = (from: string, to: string) =>
+  API.get<MarketEvent[]>('/market-events/range', { params: { from, to } });
 export const createMarketEvent = (event: Omit<MarketEvent, 'id' | 'createdAt' | 'updatedAt'>) =>
   API.post<MarketEvent>('/market-events', event);
 export const updateMarketEvent = (id: number, event: Omit<MarketEvent, 'id' | 'createdAt' | 'updatedAt'>) =>
@@ -495,14 +497,573 @@ export const deleteValuationSnapshot = (id: number) =>
   API.delete(`/valuations/snapshots/${id}`);
 
 // ===== Config APIs =====
+export type KeySource = 'DATABASE' | 'ENVIRONMENT' | 'NONE';
+
 export interface AppConfig {
   twelvedataApiKeyConfigured: boolean;
   twelvedataApiKeyMasked: string;
   /** DATABASE = saved from the UI, ENVIRONMENT = from .env / env vars, NONE = not configured */
-  twelvedataApiKeySource: 'DATABASE' | 'ENVIRONMENT' | 'NONE';
+  twelvedataApiKeySource: KeySource;
+  fredApiKeyConfigured: boolean;
+  fredApiKeyMasked: string;
+  fredApiKeySource: KeySource;
 }
 export const getConfig = () => API.get<AppConfig>('/config');
-export const saveConfig = (config: { twelvedataApiKey?: string }) =>
+/** A key that is omitted stays untouched; an empty string clears the key saved from the UI. */
+export const saveConfig = (config: { twelvedataApiKey?: string; fredApiKey?: string }) =>
   API.put<{ status: string }>('/config', config);
+
+// ===== Liquidity Monitor (美元流动性监测) APIs =====
+export type LiquidityStatus = 'GREEN' | 'YELLOW' | 'RED' | 'NONE';
+export type ThresholdDirection = 'HIGHER_IS_WORSE' | 'LOWER_IS_WORSE';
+export type SyncMode = 'INCREMENTAL' | 'FULL';
+export type SeriesKind = 'RAW' | 'DERIVED' | 'MANUAL';
+export type SeriesGroup =
+  'RATE' | 'SPREAD' | 'STOCK' | 'FACILITY' | 'CREDIT' | 'MANUAL' | 'PRESSURE' | 'POLICY' | 'BALANCE_SHEET';
+
+export interface LiquidityCatalogEntry {
+  code: string;
+  name: string;
+  unit: string;
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'EVENT';
+  source: 'NYFED' | 'TREASURY' | 'FRED' | 'FEDTEXT' | 'MANUAL' | null;
+  kind: SeriesKind;
+  group: SeriesGroup;
+  description: string | null;
+}
+
+export interface LiquidityPoint {
+  date: string; // "YYYY-MM-DD"
+  value: number;
+}
+
+export interface LiquidityCard {
+  code: string;
+  name: string;
+  unit: string;
+  row: number;
+  latest: LiquidityPoint | null;
+  prevWeek: LiquidityPoint | null;
+  change: number | null;
+  status: LiquidityStatus;
+  spark: LiquidityPoint[];
+  needsFredKey: boolean;
+}
+
+export interface LiquiditySourceStatus {
+  source: 'NYFED' | 'TREASURY' | 'FRED' | 'FEDTEXT';
+  lastSuccessAt: string | null;
+  lastStatus: 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED' | null;
+  latestObsDate: string | null;
+}
+
+export interface LiquidityDashboard {
+  asOf: string | null;
+  overallStatus: LiquidityStatus;
+  cards: LiquidityCard[];
+  sources: LiquiditySourceStatus[];
+  fredConfigured: boolean;
+  syncRunning: boolean;
+  observationCount: number;
+}
+
+/** code -> [["YYYY-MM-DD", value], ...] */
+export type LiquiditySeriesData = Record<string, [string, number][]>;
+
+export interface LiquidityScatterPoint {
+  weekEnd: string;
+  ratio: number;
+  tgcrIorb: number;
+  era: 'EARLY' | 'MID' | 'RECENT';
+}
+
+export interface LiquidityWeeklyRow {
+  key: string;
+  label: string;
+  unit: string;
+  basis: string;
+  current: number | null;
+  previous: number | null;
+  change: number | null;
+  status: LiquidityStatus;
+  dataDate: string | null;
+  note: string | null;
+}
+
+export interface LiquidityWeeklyReport {
+  weekStart: string;
+  weekEnd: string;
+  dataAsOf: string | null;
+  overallStatus: LiquidityStatus;
+  rows: LiquidityWeeklyRow[];
+  observations: string[];
+}
+
+export interface LiquiditySnapshotSummary {
+  id: number;
+  weekEnd: string;
+  hasCommentary: boolean;
+  updatedAt: string;
+}
+
+export interface LiquiditySnapshotDetail {
+  id: number;
+  weekEnd: string;
+  report: LiquidityWeeklyReport;
+  commentary: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LiquidityFetchLog {
+  id: number;
+  source: string;
+  mode: SyncMode;
+  rangeFrom: string | null;
+  rangeTo: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  status: 'RUNNING' | 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  rowsUpserted: number;
+  message: string | null;
+}
+
+export interface LiquiditySyncProgress {
+  source: string;
+  sourceIndex: number;
+  sourceCount: number;
+  step: number;
+  steps: number;
+  label: string | null;
+  startedAt: string;
+}
+
+export interface LiquiditySyncStatus {
+  running: boolean;
+  current: LiquiditySyncProgress | null;
+  lastLogs: LiquidityFetchLog[];
+}
+
+export interface LiquidityThresholdRule {
+  code: string;
+  direction: ThresholdDirection;
+  yellow: number;
+  red: number;
+  enabled: boolean;
+}
+
+export interface LiquidityThresholdView {
+  code: string;
+  name: string;
+  unit: string;
+  rule: LiquidityThresholdRule;
+  customized: boolean;
+  defaults: LiquidityThresholdRule | null;
+}
+
+export interface LiquidityManualSeries {
+  code: string;
+  name: string;
+  unit: string;
+  description: string | null;
+  createdAt: string;
+}
+
+export const getLiquidityCatalog = () => API.get<LiquidityCatalogEntry[]>('/liquidity/catalog');
+export const getLiquidityDashboard = () => API.get<LiquidityDashboard>('/liquidity/dashboard');
+export const getLiquiditySeries = (codes: string[], from?: string, to?: string) =>
+  API.get<LiquiditySeriesData>('/liquidity/series', { params: { codes: codes.join(','), from, to } });
+export const getLiquidityScatter = (from?: string) =>
+  API.get<LiquidityScatterPoint[]>('/liquidity/scatter', { params: { from } });
+
+export const getLiquidityWeekly = (weekEnd?: string) =>
+  API.get<LiquidityWeeklyReport>('/liquidity/weekly', { params: { weekEnd } });
+export const getLiquiditySnapshots = () => API.get<LiquiditySnapshotSummary[]>('/liquidity/weekly/snapshots');
+export const getLiquiditySnapshot = (id: number) => API.get<LiquiditySnapshotDetail>(`/liquidity/weekly/snapshots/${id}`);
+export const saveLiquiditySnapshot = (weekEnd: string, commentary: string) =>
+  API.post<LiquiditySnapshotDetail>('/liquidity/weekly/snapshots', { weekEnd, commentary });
+export const updateLiquiditySnapshot = (id: number, commentary: string) =>
+  API.put<LiquiditySnapshotDetail>(`/liquidity/weekly/snapshots/${id}`, { commentary });
+export const deleteLiquiditySnapshot = (id: number) => API.delete(`/liquidity/weekly/snapshots/${id}`);
+
+export type SyncSource = LiquiditySourceStatus['source'];
+export const SYNC_SOURCES: SyncSource[] = ['NYFED', 'TREASURY', 'FRED', 'FEDTEXT'];
+export const startLiquiditySync = (mode: SyncMode, source?: SyncSource) =>
+  API.post<{ status: string; mode: SyncMode }>('/liquidity/sync', null, { params: { mode, source } });
+export const getLiquiditySyncStatus = () => API.get<LiquiditySyncStatus>('/liquidity/sync/status');
+
+export const getLiquidityThresholds = () => API.get<LiquidityThresholdView[]>('/liquidity/thresholds');
+export const saveLiquidityThreshold = (code: string, rule: Omit<LiquidityThresholdRule, 'code'>) =>
+  API.put<LiquidityThresholdRule>(`/liquidity/thresholds/${code}`, rule);
+export const resetLiquidityThreshold = (code: string) => API.delete(`/liquidity/thresholds/${code}`);
+
+export const getLiquidityManualSeries = () => API.get<LiquidityManualSeries[]>('/liquidity/manual-series');
+export const createLiquidityManualSeries = (payload: { code: string; name: string; unit: string; description?: string }) =>
+  API.post<LiquidityManualSeries>('/liquidity/manual-series', payload);
+export const deleteLiquidityManualSeries = (code: string) => API.delete(`/liquidity/manual-series/${code}`);
+export const saveLiquidityObservations = (code: string, points: LiquidityPoint[]) =>
+  API.post<{ saved: number }>(`/liquidity/manual-series/${code}/observations`, points);
+export const deleteLiquidityObservation = (code: string, date: string) =>
+  API.delete(`/liquidity/manual-series/${code}/observations/${date}`);
+
+// ----- QE Radar (放水雷达) -----
+export type QeLikelihoodLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+export type FedTextDocType = 'STATEMENT' | 'IMPL_NOTE' | 'MINUTES' | 'OTHER';
+export type QeAlertType = 'STAGE_CHANGE' | 'LIKELIHOOD_CHANGE' | 'TEXT_HIT';
+
+export interface QeStage {
+  level: number; // 0..4
+  name: string;
+  triggers: string[];
+  since: string | null;
+  /** The Fed has announced L3/L4 but the data has not confirmed it yet. */
+  announced: { level: 3 | 4; docDate: string; title: string } | null;
+}
+
+export interface FedTextSummary {
+  id: number;
+  docDate: string;
+  title: string;
+  url: string;
+  docType: FedTextDocType;
+  categories: string[];
+  stance: number;
+  hasDirectiveChanges: boolean;
+}
+
+export interface FedTextDetail extends FedTextSummary {
+  body: string;
+  hits: { category: string; sentence: string }[];
+  directive: string | null;
+  directiveChanges: { added: string[]; removed: string[] } | null;
+}
+
+export interface QeRadarView {
+  asOf: string | null;
+  stage: QeStage;
+  likelihood: { level: QeLikelihoodLevel; reasons: string[] };
+  nextSteps: string[];
+  layers: { pressure: LiquidityCard[]; intent: LiquidityCard[]; action: LiquidityCard[] };
+  latestTexts: FedTextSummary[];
+  unreadAlerts: number;
+  fredConfigured: boolean;
+}
+
+export interface QeStageSegment {
+  from: string;
+  to: string;
+  level: number;
+  triggers: string[];
+}
+
+export interface QeEpisode {
+  id: string;
+  name: string;
+  keyDates: string[];
+  /** Display text such as "QE" or "L3 → L2". */
+  type: string;
+  summary: string;
+}
+
+export interface QeReplayLead {
+  code: string;
+  name: string;
+  firstYellow: string | null;
+  firstRed: string | null;
+  leadDaysYellow: number | null;
+  leadDaysRed: number | null;
+}
+
+export interface QeReplay {
+  episode: QeEpisode;
+  from: string;
+  to: string;
+  stages: { from: string; to: string; level: number }[];
+  series: LiquiditySeriesData;
+  leads: QeReplayLead[];
+  texts: { id: number; docDate: string; title: string; categories: string[] }[];
+}
+
+export interface QeAlert {
+  id: number;
+  alertType: QeAlertType;
+  title: string;
+  detail: string | null;
+  refDate: string | null;
+  acknowledged: boolean;
+  createdAt: string;
+}
+
+const QE_RADAR = '/liquidity/qe-radar';
+export const getQeRadar = () => API.get<QeRadarView>(QE_RADAR);
+export const getQeStageHistory = (from?: string) =>
+  API.get<QeStageSegment[]>(`${QE_RADAR}/stage-history`, { params: { from } });
+export const getQeTexts = (limit = 50) => API.get<FedTextSummary[]>(`${QE_RADAR}/texts`, { params: { limit } });
+export const getQeText = (id: number) => API.get<FedTextDetail>(`${QE_RADAR}/texts/${id}`);
+export const getQeEpisodes = () => API.get<QeEpisode[]>(`${QE_RADAR}/episodes`);
+export const getQeReplay = (episodeId: string) => API.get<QeReplay>(`${QE_RADAR}/replay/${episodeId}`);
+export const getQeAlerts = (unreadOnly = false, limit = 50) =>
+  API.get<QeAlert[]>(`${QE_RADAR}/alerts`, { params: { unreadOnly, limit } });
+export const getQeUnreadCount = () => API.get<{ count: number }>(`${QE_RADAR}/alerts/unread-count`);
+export const ackQeAlert = (id: number) => API.post(`${QE_RADAR}/alerts/${id}/ack`);
+export const ackAllQeAlerts = () => API.post(`${QE_RADAR}/alerts/ack-all`);
+
+// ===== Market Valuation (美股估值监测) APIs =====
+export type MvWindow = '10Y' | '20Y' | 'SINCE_1990' | 'ALL';
+export type MvDirection = 'HIGHER_IS_EXPENSIVE' | 'LOWER_IS_EXPENSIVE' | 'NONE';
+export type MvGroup =
+  'VALUATION' | 'RELATIVE' | 'PROFITABILITY' | 'STRUCTURE' | 'PRICE' | 'MACRO' | 'FACTSET' | 'MARKETS' | 'MANUAL';
+export type MvSyncSource = 'YAHOO' | 'MULTPL' | 'WPR' | 'FACTSET' | 'FRED';
+export type MvMissing = 'NO_FRED_KEY' | 'NO_DATA' | null;
+
+export interface MvCatalogEntry {
+  code: string;
+  name: string;
+  unit: string;
+  frequency: 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'EVENT';
+  source: string | null;
+  kind: SeriesKind;
+  group: MvGroup;
+  direction: MvDirection;
+  typicalLagDays: number;
+  estimate: boolean;
+  description: string | null;
+}
+
+export interface MvPrev {
+  date: string;
+  value: number;
+}
+
+export interface MvTemperatureComponent {
+  key: 'CAPE' | 'BUFFETT' | 'PS' | 'FWD_PE' | 'ERP';
+  name: string;
+  code: string;
+  value: number | null;
+  date: string | null;
+  /** "More expensive = higher" for every component (the ERP one is already inverted). */
+  percentile: number | null;
+  sampleStart: string | null;
+  n: number;
+  excluded: boolean;
+  excludedReason: string | null;
+}
+
+export interface MvTemperature {
+  value: number | null;
+  level: string | null;
+  components: MvTemperatureComponent[];
+}
+
+export interface MvCard {
+  code: string;
+  name: string;
+  unit: string;
+  group: 'ABSOLUTE' | 'RELATIVE' | 'STRUCTURE';
+  direction: MvDirection;
+  value: number | null;
+  date: string | null;
+  prev: MvPrev | null;
+  change: number | null;
+  /** Already direction-adjusted (100 − p for LOWER_IS_EXPENSIVE). */
+  percentile: number | null;
+  spark: [string, number][];
+  stale: boolean;
+  estimate: boolean;
+  missing: MvMissing;
+}
+
+export interface MvProfitItem {
+  code: string;
+  name: string;
+  unit: string;
+  value: number | null;
+  date: string | null;
+  quarter: string | null;
+  prev: MvPrev | null;
+  change: number | null;
+  stale: boolean;
+  missing: MvMissing;
+}
+
+export interface MvProfitability {
+  epsYoy: MvProfitItem;
+  netMargin: MvProfitItem;
+  roe: MvProfitItem;
+  profitGdp: MvProfitItem;
+  fsEpsGrowthQ: MvProfitItem;
+  fsFwdEpsChg13w: MvProfitItem;
+  fsEpsGrowthNextYear: MvProfitItem;
+}
+
+export interface MvQuadrant {
+  valuation: string;
+  earnings: '强' | '温和' | '下滑' | null;
+  text: string;
+}
+
+export interface MvSourceStatus {
+  source: string;
+  lastSuccessAt: string | null;
+  lastStatus: string | null;
+  latestObsDate: string | null;
+}
+
+export interface MvDashboard {
+  asOf: string | null;
+  window: MvWindow;
+  temperature: MvTemperature;
+  cards: MvCard[];
+  profitability: MvProfitability;
+  quadrant: MvQuadrant | null;
+  sources: MvSourceStatus[];
+  fredConfigured: boolean;
+  syncRunning: boolean;
+  /** False while the observation table is still empty (initial backfill). */
+  hasData: boolean;
+}
+
+/** code -> [["YYYY-MM-DD", value], ...] */
+export type MvSeriesData = Record<string, [string, number][]>;
+
+export interface MvStats {
+  n: number;
+  sampleStart: string | null;
+  mean: number;
+  sd: number;
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
+export interface MvSeriesResponse {
+  series: MvSeriesData;
+  /** Only present when a window was requested. */
+  stats?: Record<string, MvStats | null>;
+}
+
+export type MvMarketWindowKey = '1Y' | '5Y' | '10Y' | '20Y';
+export type MvZLabel = '昂贵' | '高估' | '合理' | '低估' | '便宜';
+
+export interface MvMarketWindow {
+  avg: number | null;
+  sd: number | null;
+  z: number | null;
+  label: MvZLabel | null;
+}
+
+export interface MvMarketRow {
+  market: 'SPX' | 'NDX' | 'DJI' | 'RUT' | 'CN' | 'HK' | 'JP';
+  name: string;
+  scopeNote: string | null;
+  date: string | null;
+  pe: number | null;
+  windows: Partial<Record<MvMarketWindowKey, MvMarketWindow>>;
+  history: [string, number][];
+}
+
+export interface MvDecompositionPart {
+  total: number;
+  valuation: number;
+  earnings: number;
+}
+
+export interface MvDecompositionRow {
+  horizon: '1Y' | '3Y' | '5Y' | '10Y';
+  startDate: string;
+  endDate: string;
+  ttm: MvDecompositionPart | null;
+  cape: MvDecompositionPart | null;
+  forward: MvDecompositionPart | null;
+}
+
+export interface MvScatterPoint {
+  date: string;
+  roe: number;
+  pb: number;
+  era: '2000-2008' | '2009-2019' | '2020+' | 'LATEST';
+}
+
+export interface MvSyncProgress {
+  source: string;
+  sourceIndex: number;
+  sourceCount: number;
+  step: number;
+  steps: number;
+  label: string | null;
+  startedAt: string;
+}
+
+export interface MvFetchLog {
+  id: number;
+  source: string;
+  mode: SyncMode;
+  rangeFrom: string | null;
+  rangeTo: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  status: 'RUNNING' | 'SUCCESS' | 'PARTIAL' | 'FAILED' | 'SKIPPED';
+  rowsUpserted: number;
+  message: string | null;
+}
+
+export interface MvSyncStatus {
+  running: boolean;
+  current: MvSyncProgress | null;
+  lastLogs: MvFetchLog[];
+}
+
+export interface MvFactsetReport {
+  weekFriday: string;
+  reportDate: string | null;
+  fileName: string | null;
+  status: 'PARSED' | 'PARSE_FAILED' | 'NOT_FOUND';
+  fiscalQuarter: string | null;
+  message: string | null;
+  fetchedAt: string;
+}
+
+export interface MvFactsetReports {
+  reports: MvFactsetReport[];
+  processedWeeks: number;
+  totalWeeks: number;
+}
+
+export interface MvManualSeries {
+  code: string;
+  name: string;
+  unit: string;
+  description: string | null;
+  createdAt: string;
+}
+
+const MV = '/market-valuation';
+export const MV_SYNC_SOURCES: MvSyncSource[] = ['YAHOO', 'MULTPL', 'WPR', 'FACTSET', 'FRED'];
+
+export const getMvCatalog = () => API.get<MvCatalogEntry[]>(`${MV}/catalog`);
+export const getMvDashboard = (window: MvWindow) => API.get<MvDashboard>(`${MV}/dashboard`, { params: { window } });
+export const getMvSeries = (codes: string[], from?: string, to?: string, window?: MvWindow) =>
+  API.get<MvSeriesResponse>(`${MV}/series`, { params: { codes: codes.join(','), from, to, window } });
+export const getMvMarkets = () => API.get<MvMarketRow[]>(`${MV}/markets`);
+export const getMvDecomposition = () => API.get<MvDecompositionRow[]>(`${MV}/decomposition`);
+export const getMvPbRoeScatter = () => API.get<MvScatterPoint[]>(`${MV}/scatter/pb-roe`);
+
+export const startMvSync = (mode: SyncMode, source?: MvSyncSource) =>
+  API.post<{ status: string; mode: SyncMode }>(`${MV}/sync`, null, { params: { mode, source } });
+export const refreshMvIfStale = () =>
+  API.post<{ triggered: boolean; lastSuccessAt: string | null }>(`${MV}/refresh-if-stale`);
+export const getMvSyncStatus = () => API.get<MvSyncStatus>(`${MV}/sync/status`);
+export const getMvFactsetReports = (limit = 30) => API.get<MvFactsetReports>(`${MV}/factset/reports`, { params: { limit } });
+export const retryMvFactsetReport = (weekFriday: string) =>
+  API.post<{ status: string }>(`${MV}/factset/reports/${weekFriday}/retry`);
+
+export const getMvManualSeries = () => API.get<MvManualSeries[]>(`${MV}/manual-series`);
+export const createMvManualSeries = (payload: { code: string; name: string; unit: string; description?: string }) =>
+  API.post<MvManualSeries>(`${MV}/manual-series`, payload);
+export const deleteMvManualSeries = (code: string) => API.delete(`${MV}/manual-series/${code}`);
+export const saveMvObservations = (code: string, points: { date: string; value: number }[]) =>
+  API.post<{ saved: number }>(`${MV}/manual-series/${code}/observations`, points);
+export const deleteMvObservation = (code: string, date: string) =>
+  API.delete(`${MV}/manual-series/${code}/observations/${date}`);
 
 

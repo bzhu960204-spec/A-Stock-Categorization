@@ -1,0 +1,10 @@
+{"data":[
+ {"record_date":"2021-09-30","account_type":"Federal Reserve Account","close_today_bal":"215160","open_today_bal":"173745"},
+ {"record_date":"2021-10-01","account_type":"Treasury General Account (TGA)","close_today_bal":"132452","open_today_bal":"215160"},
+ {"record_date":"2022-04-18","account_type":"Treasury General Account (TGA) Closing Balance","close_today_bal":"null","open_today_bal":"841253"},
+ {"record_date":"2026-11-19","account_type":"Treasury General Account (TGA) Opening Balance","close_today_bal":"null","open_today_bal":"892310"},
+ {"record_date":"2026-11-19","account_type":"Treasury General Account (TGA) Closing Balance","close_today_bal":"null","open_today_bal":"891223"},
+ {"record_date":"2026-11-19","account_type":"Total TGA Deposits (Table II)","close_today_bal":"null","open_today_bal":"303648"},
+ {"record_date":"2026-11-20","account_type":"Treasury General Account (TGA) Closing Balance","close_today_bal":"null","open_today_bal":"null"},
+ {"record_date":"2021-10-04","account_type":"Treasury General Account (TGA)","close_today_bal":"null","open_today_bal":"132452"}
+],"meta":{"total-count":8,"total-pages":1}}

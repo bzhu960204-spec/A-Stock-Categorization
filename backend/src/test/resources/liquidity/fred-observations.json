@@ -1,0 +1,4 @@
+{ "realtime_start": "2026-11-22", "realtime_end": "2026-11-22", "observations": [
+  { "realtime_start": "2026-11-22", "realtime_end": "2026-11-22", "date": "2026-11-12", "value": "2965400" },
+  { "realtime_start": "2026-11-22", "realtime_end": "2026-11-22", "date": "2026-11-19", "value": "." }
+] }

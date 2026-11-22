@@ -1,7 +1,7 @@
 /** Top-level modules; each one is served under `/<id>`. */
 export type ModuleId =
   | 'stocks' | 'research' | 'calendar' | 'earnings-calendar' | 'techcycle'
-  | 'ideas' | 'trades' | 'valuation' | 'archive';
+  | 'ideas' | 'trades' | 'valuation' | 'liquidity' | 'market-valuation' | 'archive';
 
 export const modulePath = (id: ModuleId) => `/${id}`;
 

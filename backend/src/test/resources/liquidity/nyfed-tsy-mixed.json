@@ -1,0 +1,22 @@
+{ "treasury": { "auctions": [
+  { "operationId": "t1", "auctionStatus": "Results", "operationType": "Outright Coupon Purchase", "operationDate": "2025-11-04",
+    "operationDirection": "P", "totalParAmtAccepted": "50000000" },
+  { "operationId": "t2", "auctionStatus": "Results", "operationType": "Outright Coupon Sale", "operationDate": "2026-11-03",
+    "operationDirection": "S", "totalParAmtAccepted": "50000000" },
+  { "operationId": "t3", "auctionStatus": "Results", "operationType": "Outright Coupon Purchase", "operationDate": "2020-04-30",
+    "operationDirection": "P", "totalParAmtAccepted": "3000000000" },
+  { "operationId": "t4", "auctionStatus": "Results", "operationType": "Outright Coupon Purchase", "operationDate": "2012-09-26",
+    "operationDirection": "P", "totalParAmtAccepted": "8000000000" },
+  { "operationId": "t5", "auctionStatus": "Results", "operationType": "Outright Coupon Sale", "operationDate": "2012-09-26",
+    "operationDirection": "S", "totalParAmtAccepted": "7500000000" },
+  { "operationId": "t6", "auctionStatus": "Results", "operationType": "Outright TIPS Purchase", "operationDate": "2012-09-27",
+    "operationDirection": "P", "totalParAmtAccepted": "1000000000" },
+  { "operationId": "t7", "auctionStatus": "Results", "operationType": "Outright Coupon Sale", "operationDate": "2012-09-27",
+    "operationDirection": "S", "totalParAmtAccepted": "1000000000" },
+  { "operationId": "t8", "auctionStatus": "Results", "operationType": "Outright Agency Debt Purchase", "operationDate": "2009-03-25",
+    "operationDirection": "P", "totalParAmtAccepted": "2000000000" },
+  { "operationId": "t9", "auctionStatus": "Results", "operationType": "Outright Bill Purchase", "operationDate": "2020-04-30",
+    "operationDirection": "P", "totalParAmtAccepted": "40000000" },
+  { "operationId": "t10", "auctionStatus": "Announced", "operationType": "Outright Coupon Purchase", "operationDate": "2026-11-23",
+    "operationDirection": "P", "totalParAmtAccepted": "9000000000" }
+] } }

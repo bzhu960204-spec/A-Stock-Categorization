@@ -14,7 +14,7 @@ class AppConfigServiceTest {
 
     @Test
     void savedKeyOverridesEnvironmentAndClearingFallsBack() {
-        AppConfigService service = new AppConfigService(repo, " env-key ");
+        AppConfigService service = new AppConfigService(repo, " env-key ", "");
         assertThat(service.resolveTwelveDataApiKey()).isEqualTo("env-key");
         assertThat(service.twelveDataApiKeySource()).isEqualTo(AppConfigService.KeySource.ENVIRONMENT);
 
@@ -29,10 +29,27 @@ class AppConfigServiceTest {
     }
 
     @Test
+    void fredKeyIsStoredIndependentlyOfTheTwelveDataKey() {
+        AppConfigService service = new AppConfigService(repo, "td-env", " fred-env ");
+        assertThat(service.resolveFredApiKey()).isEqualTo("fred-env");
+        assertThat(service.fredApiKeySource()).isEqualTo(AppConfigService.KeySource.ENVIRONMENT);
+
+        service.saveFredApiKey(" fred-ui ");
+        assertThat(service.resolveFredApiKey()).isEqualTo("fred-ui");
+        assertThat(service.fredApiKeySource()).isEqualTo(AppConfigService.KeySource.DATABASE);
+        assertThat(service.resolveTwelveDataApiKey()).isEqualTo("td-env");
+
+        service.saveFredApiKey("");
+        assertThat(service.resolveFredApiKey()).isEqualTo("fred-env");
+    }
+
+    @Test
     void noKeyAnywhereIsReportedAsNone() {
-        AppConfigService service = new AppConfigService(repo, null);
+        AppConfigService service = new AppConfigService(repo, null, null);
         assertThat(service.resolveTwelveDataApiKey()).isEmpty();
         assertThat(service.twelveDataApiKeySource()).isEqualTo(AppConfigService.KeySource.NONE);
+        assertThat(service.resolveFredApiKey()).isEmpty();
+        assertThat(service.fredApiKeySource()).isEqualTo(AppConfigService.KeySource.NONE);
     }
 
     @Test

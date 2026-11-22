@@ -1,0 +1,14 @@
+{ "treasury": { "auctions": [
+  { "operationId": "OR 111826 25", "auctionStatus": "Results", "operationType": "Outright Bill Purchase",
+    "operationDate": "2026-11-18", "settlementDate": "2026-11-19", "operationDirection": "P",
+    "totalParAmtSubmitted": "24437000000", "totalParAmtAccepted": "1756000000" },
+  { "operationId": "OR 111826 26", "auctionStatus": "Results", "operationType": "Outright Bill Purchase",
+    "operationDate": "2026-11-18", "operationDirection": "P",
+    "totalParAmtSubmitted": "9000000000", "totalParAmtAccepted": "244000000" },
+  { "operationId": "OR 111726 10", "auctionStatus": "Results", "operationType": "Outright Coupon Purchase",
+    "operationDate": "2026-11-17", "operationDirection": "P",
+    "totalParAmtSubmitted": "5000000000", "totalParAmtAccepted": "3000000000" },
+  { "operationId": "OR 111626 10", "auctionStatus": "Results", "operationType": "Outright Bill Sale",
+    "operationDate": "2026-11-16", "operationDirection": "S",
+    "totalParAmtSubmitted": "5000000000", "totalParAmtAccepted": "2000000000" }
+] } }

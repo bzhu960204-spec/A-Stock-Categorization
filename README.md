@@ -10,14 +10,14 @@
 
 ## 前端结构
 
-- 路由：`/stocks`、`/research`、`/techcycle`、`/ideas`、`/trades`、`/valuation`、`/calendar`、`/earnings-calendar`、`/archive`（及 `/archive/stocks|reports|ideas`），浏览器前进/后退、刷新、直接打开链接均可用；prod 模式下后端会把未知路径回退到 `index.html`。
+- 路由：`/stocks`、`/research`、`/techcycle`、`/ideas`、`/trades`、`/valuation`、`/liquidity`、`/market-valuation`、`/calendar`、`/earnings-calendar`、`/archive`（及 `/archive/stocks|reports|ideas`），浏览器前进/后退、刷新、直接打开链接均可用；prod 模式下后端会把未知路径回退到 `index.html`。
 - 目录按功能逐步迁移：`src/features/<模块>/`（如 `stocks`、`valuation`）、`src/shared/`（通用组件、hooks、Markdown、图片上传）、`src/app/`（Provider、路由辅助）。新样式使用 CSS Modules（`*.module.css`），`App.css` 逐步拆分。
 - 交互反馈：统一使用 `useToast()` / `useConfirm()`（`src/shared/ui/feedback`），不要再用 `window.alert` / `window.confirm`；后端错误用 `api.ts` 的 `getErrorMessage` 显示（后端返回 `{message}`）。
 - 数据请求：新代码优先用 TanStack Query（`useQuery` + `queryKey`），写操作后 `invalidateQueries`；参考 `src/features/stocks/useStockData.ts`。
 
 ## 配置与启动
 
-1. 复制 `.env.example` 为 `.env`，按需填入 `TWELVEDATA_API_KEY`、`EASTMONEY_TOKEN` 等（`.env` 已被 git 忽略，**切勿提交密钥**）。后端启动时会自动读取根目录 `.env`。
+1. 复制 `.env.example` 为 `.env`，按需填入 `TWELVEDATA_API_KEY`、`EASTMONEY_TOKEN`、`FRED_API_KEY` 等（`.env` 已被 git 忽略，**切勿提交密钥**）。后端启动时会自动读取根目录 `.env`。`TWELVEDATA_API_KEY` / `FRED_API_KEY` 也可以在首页「⚙ 设置」里保存，界面保存的值优先于 `.env`。
 2. 开发模式：`start-dev.cmd`（启用 `dev` profile，H2 Console 位于 `/h2-console`）。
 3. 生产模式：`build-prod.cmd` 构建后运行 `start-prod.cmd`（单端口，H2 Console 关闭）。
 4. 默认只监听本机 `127.0.0.1`。应用没有登录认证，如确需让局域网其他设备访问，可给启动脚本加 `-Lan` 参数。
@@ -42,7 +42,7 @@ cd frontend && npm run lint   # ESLint
 
 表结构由 Flyway 管理（`backend/src/main/resources/db/migration`），Hibernate 只做校验（`ddl-auto=validate`）。
 
-- **修改实体（新增/修改字段或表）时**，必须新增一个迁移脚本，例如 `V4__add_stock_tags.sql`，否则启动会因 schema 校验失败而退出。
+- **修改实体（新增/修改字段或表）时**，必须新增一个迁移脚本，例如 `V5__add_stock_tags.sql`，否则启动会因 schema 校验失败而退出。
 - **已发布的迁移脚本不要修改**，有问题就再加一个新版本修正。
 - 引入 Flyway 之前创建的旧库，首次启动时会自动标记为 V1（不会重新执行 `V1__baseline.sql`），然后继续执行后续迁移。
 - 数据迁移也可以写成 Java 迁移（`backend/src/main/java/db/migration/V<n>__*.java`），例如 `V3__Extract_inline_images` 把旧内容里内嵌的 base64 图片转存到 `stock_images`。
@@ -53,6 +53,45 @@ cd frontend && npm run lint   # ESLint
 - 文件上传（图片、Idea 附件）单个文件上限 20MB（`spring.servlet.multipart.max-file-size`），超出返回 413「上传文件过大」。
 
 改进计划与进度见 [docs/project-improvement](docs/project-improvement/project-improvement-plan.md)。
+
+---
+
+## 美元流动性监测（`/liquidity`）
+
+追踪 SOFR、TGCR、EFFR、IORB、准备金、ON RRP、TGA、SRF、美联储购买短债（RMP）、高收益债利差等美元流动性指标：总览状态灯、趋势图、复刻高盛 Exhibit 5 的准备金散点图、周报（可保存快照、导出 Markdown）。设计与口径详见 [docs/liquidity-monitor/design.md](docs/liquidity-monitor/design.md)。
+
+**外部数据源**（后端定时同步，每天 09:30 / 22:30 北京时间增量同步；首次启动观测表为空时约 2 分钟后自动全量回填 2018 年至今）：
+
+| 数据源 | 内容 | API Key |
+|---|---|---|
+| 纽约联储 Markets API | SOFR / TGCR / BGCR / EFFR、回购与逆回购、美联储购买国债 | 不需要 |
+| 美国财政部 Fiscal Data | TGA 余额（DTS） | 不需要 |
+| FRED | IORB/IOER、准备金、银行总资产、美联储总资产、高收益债利差 | 需要（免费申请：<https://fredaccount.stlouisfed.org/apikeys>） |
+
+- FRED Key 通过 `.env` 的 `FRED_API_KEY` 或首页「⚙ 设置」配置；**没有 Key 时 FRED 数据源会被跳过**，其余数据源照常工作，依赖 IORB / 准备金的指标会提示「需要 FRED API Key」。
+- 在模块的「设置」页可以手动增量同步 / 全量重建、查看同步日志、修改状态灯阈值，并录入手动序列（如甲骨文 5Y CDS）。
+- 配置项见 `application.properties` 中的 `app.liquidity.*`；`app.liquidity.enabled=false` 会关闭定时同步与启动补偿（手动同步不受影响）。
+- 图表使用 ECharts，只在打开本模块时按需加载。
+
+---
+
+## 美股估值监测（`/market-valuation`）
+
+监测美股整体估值冷热：席勒 CAPE、巴菲特指标、TTM / 远期 PE、PS、股息率、实际股权风险溢价（1/CAPE − TIPS）、盈利能力（EPS 同比、净利率、ROE、FactSet 每周增速与远期 EPS 修正）、多市场 PE 对比（标普 / 纳指 / 道指 / 罗素 / 中国 / 香港 / 日本）、回报拆解（估值扩张 vs 盈利增长）、PB–ROE 散点，并汇总为 0–100 的估值温度计。支持「复制给 AI」导出 Markdown 摘要。设计与口径详见 [docs/market-valuation/design.md](docs/market-valuation/design.md)。
+
+**外部数据源**（每天 06:30 北京时间增量同步；首次启动约 2 分钟后自动全量回填；打开模块时若距上次成功同步超过 6 小时会自动刷新；FactSet 历史每次最多回填 60 周，由每小时的补偿任务逐步补齐）：
+
+| 数据源 | 内容 | API Key |
+|---|---|---|
+| multpl.com | 标普 500 的 CAPE / PE / 股息率 / PB / PS / EPS / 每股销售额 / 每股净资产 | 不需要 |
+| Yahoo Finance（非官方接口） | 指数与 ETF 日线（标普、纳指、道指、罗素、Wilshire 5000、VIX、SPY、RSP） | 不需要 |
+| worldperatio.com | 7 个市场的当前 PE 与 1/5/10/20 年均值、标准差 | 不需要 |
+| FactSet Earnings Insight（每周 PDF） | 远期 PE、EPS / 营收增速、超预期比例、目标价 | 不需要 |
+| FRED | GDP、Z.1 股权市值、企业利润、10 年国债与 TIPS 收益率 | 需要（与流动性模块共用） |
+
+- 没有 FRED Key 时 FRED 数据源被跳过，巴菲特指标、实际 ERP 等依赖它的指标会提示「需要 FRED API Key」。
+- 日度估值是「价格 ÷ 隐含基本面」的估算（界面标注「估算」）；各数据源口径不同，不要互相比较数值。
+- 配置项见 `application.properties` 中的 `app.market-valuation.*`；`app.market-valuation.enabled=false` 会关闭定时同步与启动补偿（手动同步与打开页面时的刷新不受影响）。
 
 ---
 

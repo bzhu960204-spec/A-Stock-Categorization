@@ -21,6 +21,11 @@ public class MarketEventService {
         return marketEventRepository.findByEventDateBetweenOrderByEventDateAsc(start, end);
     }
 
+    public List<MarketEvent> getByRange(LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) throw new IllegalArgumentException("from 不能晚于 to");
+        return marketEventRepository.findByEventDateBetweenOrderByEventDateAsc(from, to);
+    }
+
     public MarketEvent create(MarketEvent event) {
         return marketEventRepository.save(event);
     }
